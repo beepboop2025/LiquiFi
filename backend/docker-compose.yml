@@ -1,0 +1,126 @@
+# LiquiFi Backend - Production Docker Compose
+# Full stack with PostgreSQL and Redis
+
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: liquifi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-liquifi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-liquifi}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - liquifi-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-liquifi} -d ${POSTGRES_DB:-liquifi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: liquifi-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - liquifi-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # LiquiFi Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: liquifi-backend
+    restart: unless-stopped
+    environment:
+      # Server Configuration
+      LIQUIFI_ENV: ${LIQUIFI_ENV:-production}
+      LIQUIFI_HOST: ${LIQUIFI_HOST:-0.0.0.0}
+      LIQUIFI_PORT: ${LIQUIFI_PORT:-8000}
+      LIQUIFI_CORS_ORIGINS: ${LIQUIFI_CORS_ORIGINS:-}
+      LIQUIFI_RETRAIN_KEY: ${LIQUIFI_RETRAIN_KEY:-}
+      LIQUIFI_REQUIRE_HTTPS: ${LIQUIFI_REQUIRE_HTTPS:-true}
+      
+      # Database Configuration
+      DATABASE_URL: ${DATABASE_URL:-postgresql://liquifi:changeme@postgres:5432/liquifi}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-liquifi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-liquifi}
+      
+      # Redis Configuration
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # External API Keys
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      
+      # Playwright
+      PLAYWRIGHT_BROWSERS_PATH: /home/liquifi/.cache/ms-playwright
+    volumes:
+      # Persistent data directories
+      - ./seed_data:/app/seed_data
+      - ./models:/app/models
+      - ./logs:/app/logs
+      - ./metrics:/app/metrics
+      # Cache directory (can use tmpfs for better performance)
+      - cache_data:/app/data/_cache
+    ports:
+      - "8000:8000"
+    networks:
+      - liquifi-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  cache_data:
+    driver: local
+
+networks:
+  liquifi-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

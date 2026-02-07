@@ -1,0 +1,44 @@
+.table-row {
+  display: grid;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-1);
+  align-items: center;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.table-row:hover { background: var(--bg-3); }
+
+.table-header {
+  font-size: 10px;
+  color: var(--text-4);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-2);
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: var(--border-3); }
+
+.rate-ticker-wrap { overflow: hidden; }
+.rate-ticker-inner {
+  display: flex;
+  gap: 28px;
+  animation: ticker 40s linear infinite;
+  width: max-content;
+  will-change: transform;
+}
+
+.grid-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image:
+    linear-gradient(rgba(6,214,224,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6,214,224,0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 0;
+}

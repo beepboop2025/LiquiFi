@@ -1,0 +1,43 @@
+# Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+websockets>=14.0
+
+# Authentication & Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.9  # For form data parsing
+email-validator>=2.1.0   # For email validation in Pydantic
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9   # PostgreSQL adapter
+alembic>=1.13.0          # Database migrations (optional)
+
+# HTTP & Web Scraping
+httpx>=0.28.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
+# Browser Automation (optional but recommended for CCIL)
+# Install with: pip install playwright && playwright install chromium
+playwright>=1.40.0
+
+# ML & Data Science
+torch>=2.0.0
+numpy>=2.0.0
+pandas>=2.0.0
+scikit-learn>=1.5.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.28.0  # For TestClient
+
+# Optional: GitHub Data Libraries (install separately)
+# These add supplementary data sources from GitHub repos:
+# nsepy>=0.1.0      # NSE India equity data (alternative to failing NSE scraper)
+# investpy>=1.0.0   # Global markets data (bonds, commodities, FX)
+# 
+# Install with: pip install nsepy investpy
+# Then use: from data.scrapers import scrape_all_extended

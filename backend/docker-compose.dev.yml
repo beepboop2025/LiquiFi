@@ -1,0 +1,122 @@
+# LiquiFi Backend - Development Docker Compose
+# Override file for development with hot reload
+
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: liquifi-postgres-dev
+    environment:
+      POSTGRES_USER: liquifi_dev
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: liquifi_dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with local postgres
+    networks:
+      - liquifi-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U liquifi_dev -d liquifi_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: liquifi-redis-dev
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts with local redis
+    networks:
+      - liquifi-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev  # Use development Dockerfile
+    container_name: liquifi-backend-dev
+    environment:
+      # Development Configuration
+      LIQUIFI_ENV: development
+      LIQUIFI_HOST: 0.0.0.0
+      LIQUIFI_PORT: 8000
+      LIQUIFI_CORS_ORIGINS: "http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173"
+      LIQUIFI_RETRAIN_KEY: liquifi-retrain-dev
+      LIQUIFI_REQUIRE_HTTPS: "false"
+      
+      # Database Configuration
+      DATABASE_URL: postgresql://liquifi_dev:devpassword@postgres:5432/liquifi_dev
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: liquifi_dev
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: liquifi_dev
+      
+      # Redis Configuration
+      REDIS_URL: redis://redis:6379/0
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      
+      # Debug Mode
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      
+      # External API Keys (from .env file)
+      FRED_API_KEY: ${FRED_API_KEY:-}
+      
+      # Playwright
+      PLAYWRIGHT_BROWSERS_PATH: /home/liquifi/.cache/ms-playwright
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      # Exclude these directories from the bind mount
+      - /app/venv
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - /app/data/_cache
+      # Named volumes for persistence
+      - seed_data_dev:/app/seed_data
+      - models_dev:/app/models
+      - logs_dev:/app/logs
+      - metrics_dev:/app/metrics
+    ports:
+      - "8000:8000"
+    networks:
+      - liquifi-dev-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Override the default command to enable hot reload
+    command: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --reload-dir /app
+      --log-level debug
+    # Keep stdin open for debugging
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  seed_data_dev:
+  models_dev:
+  logs_dev:
+  metrics_dev:
+
+networks:
+  liquifi-dev-network:
+    driver: bridge

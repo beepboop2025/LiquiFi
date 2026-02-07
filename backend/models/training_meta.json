@@ -1,0 +1,84 @@
+{
+  "elapsed_s": 1570.6,
+  "epochs_requested": 100,
+  "target_mode": "delta",
+  "dataset_path": "/Users/mrinal/Documents/Treasury Automation App/backend/seed_data/training_rates.csv",
+  "dataset_rows": 8648,
+  "num_features": 24,
+  "train_samples": 7350,
+  "val_samples": 1298,
+  "data_summary": {
+    "path": "/Users/mrinal/Documents/Treasury Automation App/backend/seed_data/training_rates.csv",
+    "rows": 8719,
+    "base_rows": 8760,
+    "live_rows": 7,
+    "holdout_rows": 48,
+    "holdout_path": "/Users/mrinal/Documents/Treasury Automation App/backend/seed_data/training_rates_holdout.csv"
+  },
+  "models": {
+    "lstm": {
+      "best_epoch": 3,
+      "epochs_run": 100,
+      "beats_naive": true,
+      "model_metrics": {
+        "rmse": 9.100337028503418,
+        "mae": 5.942389488220215,
+        "mape": 3.1702566146850586
+      },
+      "naive_metrics": {
+        "rmse": 17.333585739135742,
+        "mae": 13.094619750976562,
+        "mape": 6.8863115310668945
+      }
+    },
+    "gru": {
+      "best_epoch": 11,
+      "epochs_run": 100,
+      "beats_naive": true,
+      "model_metrics": {
+        "rmse": 8.808098793029785,
+        "mae": 5.720897674560547,
+        "mape": 3.0820648670196533
+      },
+      "naive_metrics": {
+        "rmse": 17.333585739135742,
+        "mae": 13.094619750976562,
+        "mape": 6.8863115310668945
+      }
+    },
+    "transformer": {
+      "best_epoch": 12,
+      "epochs_run": 100,
+      "beats_naive": true,
+      "model_metrics": {
+        "rmse": 9.444917678833008,
+        "mae": 6.324743270874023,
+        "mape": 3.3645522594451904
+      },
+      "naive_metrics": {
+        "rmse": 17.333585739135742,
+        "mae": 13.094619750976562,
+        "mape": 6.8863115310668945
+      }
+    }
+  },
+  "ensemble_weights": {
+    "lstm": 0.3337,
+    "gru": 0.3448,
+    "transformer": 0.3215
+  },
+  "walk_forward": null,
+  "selected_epoch": 3,
+  "selected_beats_naive": true,
+  "selected_model_metrics": {
+    "rmse": 9.100337028503418,
+    "mae": 5.942389488220215,
+    "mape": 3.1702566146850586
+  },
+  "selected_naive_metrics": {
+    "rmse": 17.333585739135742,
+    "mae": 13.094619750976562,
+    "mape": 6.8863115310668945
+  },
+  "model_replaced": true
+}

@@ -1,0 +1,55 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+backend/venv/
+
+# Environment / secrets
+.env
+.env.local
+.env.production
+
+# SQLite database (dev only — PG is primary)
+backend/liquifi.db
+
+# PyTorch model checkpoints (large binaries — train locally)
+backend/models/*.pt
+backend/models/*.npz
+
+# Scraped data & cache (ephemeral, rebuilt by scrapers)
+backend/data/collected/
+backend/data/_cache/
+
+# Live + training CSVs (rebuilt by training pipeline)
+backend/seed_data/live_snapshots.csv
+backend/seed_data/training_rates.csv
+backend/seed_data/training_rates_holdout.csv
+
+# Logs & metrics
+backend/logs/
+backend/metrics/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Review / debug archives (large, not source)
+review_files12/
+review_kimi_debug/
+review_kimi_update/
+*.zip
+
+# Pytest / coverage
+.pytest_cache/
+htmlcov/
+.coverage
