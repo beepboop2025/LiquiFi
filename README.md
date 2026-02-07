@@ -4,6 +4,21 @@ Real-time treasury management platform that scrapes live money market data from 
 
 ![LiquiFi Dashboard](dashboard-screenshot.png)
 
+### Command Center
+24h liquidity forecast, cash position waterfall, yield attribution, and active alerts.
+
+![Command Center](screenshots/command-center.png)
+
+### AI Engine
+Monte Carlo simulation (300 paths), gap detection, and model performance metrics.
+
+![AI Engine](screenshots/ai-engine.png)
+
+### Risk & Compliance
+Instrument exposure vs regulatory limits, stress test scenarios, and compliance engine (LCR/NSFR/SLR).
+
+![Risk & Compliance](screenshots/risk-compliance.png)
+
 ## What it does
 
 - **213 live data fields** scraped from RBI, FBIL, CCIL, FRED, ECB, PBoC, BIS, World Bank, akshare, and yfinance — no paid APIs
