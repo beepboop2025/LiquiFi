@@ -38,7 +38,7 @@ export const randIntInclusive = (min, max) => {
   const [loRaw, hiRaw] = normalizeBounds(min, max);
   const lo = Math.ceil(loRaw);
   const hi = Math.floor(hiRaw);
-  if (lo >= hi) return lo;
+  if (lo > hi) return lo;
   return Math.floor(lo + Math.random() * (hi - lo + 1));
 };
 

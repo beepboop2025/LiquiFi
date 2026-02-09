@@ -67,9 +67,15 @@ run_migrations() {
     
     # Check if we have a migrations script
     if [ -f "scripts/migrate.py" ]; then
-        python scripts/migrate.py
+        if ! python scripts/migrate.py; then
+            log "❌ Migration failed (scripts/migrate.py)"
+            exit 1
+        fi
     elif [ -f "scripts/init_db.py" ]; then
-        python scripts/init_db.py
+        if ! python scripts/init_db.py; then
+            log "❌ Migration failed (scripts/init_db.py)"
+            exit 1
+        fi
     else
         log "ℹ️  No migration script found, skipping migrations"
     fi

@@ -270,7 +270,10 @@ def _build_input_sequence(rates: dict, rate_buffer: list[dict] | None) -> np.nda
             low = entry.get("call_money_low", 6.50)
             ca = (high + low) / 2
 
-            current_bal = float(entry.get("_balance", last_bal))
+            try:
+                current_bal = float(entry.get("_balance", last_bal))
+            except (TypeError, ValueError):
+                current_bal = last_bal
             net = current_bal - last_bal
             prev_inflow = max(0.0, net)
             prev_outflow = max(0.0, -net)

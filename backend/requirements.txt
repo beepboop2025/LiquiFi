@@ -1,38 +1,42 @@
 # Web Framework
-fastapi>=0.115.0
-uvicorn[standard]>=0.34.0
-websockets>=14.0
+fastapi==0.128.5
+uvicorn[standard]==0.40.0
+websockets==16.0
 
 # Authentication & Security
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.9  # For form data parsing
-email-validator>=2.1.0   # For email validation in Pydantic
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.22  # For form data parsing
+email-validator==2.3.0   # For email validation in Pydantic
 
 # Database
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.9   # PostgreSQL adapter
-alembic>=1.13.0          # Database migrations (optional)
+sqlalchemy==2.0.46
+psycopg2-binary==2.9.11   # PostgreSQL adapter
+alembic==1.18.3          # Database migrations (optional)
 
 # HTTP & Web Scraping
-httpx>=0.28.0
-beautifulsoup4>=4.12.0
-lxml>=5.0.0
+httpx==0.28.1
+beautifulsoup4==4.14.3
+lxml==6.0.2
 
 # Browser Automation (optional but recommended for CCIL)
 # Install with: pip install playwright && playwright install chromium
-playwright>=1.40.0
+playwright==1.58.0
 
 # ML & Data Science
-torch>=2.0.0
-numpy>=2.0.0
-pandas>=2.0.0
-scikit-learn>=1.5.0
+torch==2.10.0
+numpy==2.4.2
+pandas==3.0.0
+scikit-learn==1.8.0
 
 # Testing
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
-httpx>=0.28.0  # For TestClient
+pytest==9.0.2
+pytest-asyncio==1.3.0
+
+# Additional
+pydantic==2.12.5
+bcrypt==5.0.0
+cryptography==46.0.4
 
 # Optional: GitHub Data Libraries (install separately)
 # These add supplementary data sources from GitHub repos:

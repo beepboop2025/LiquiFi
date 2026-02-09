@@ -189,18 +189,26 @@ class LiquidityDataset(Dataset):
         """Load persisted scaler parameters. Returns (feat_min, feat_max) or None."""
         if not os.path.exists(path):
             return None
-        data = np.load(path)
-        return data["feat_min"], data["feat_max"]
+        try:
+            data = np.load(path)
+            return data["feat_min"], data["feat_max"]
+        except Exception as exc:
+            logger.warning("Corrupted scaler file %s: %s — will re-create on next training", path, exc)
+            return None
 
     @staticmethod
     def load_num_features(path: str = config.SCALER_PATH) -> int:
         """Load the number of features from persisted scaler."""
         if not os.path.exists(path):
             return config.NUM_FEATURES
-        data = np.load(path)
-        if "num_features" in data:
-            return int(data["num_features"][0])
-        return len(data["feat_min"])
+        try:
+            data = np.load(path)
+            if "num_features" in data:
+                return int(data["num_features"][0])
+            return len(data["feat_min"])
+        except Exception as exc:
+            logger.warning("Corrupted scaler file %s: %s — using default features", path, exc)
+            return config.NUM_FEATURES
 
     def __len__(self) -> int:
         return len(self.features)

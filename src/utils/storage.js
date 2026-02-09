@@ -56,6 +56,7 @@ export const storageWrite = (key, value) => {
         return false;
       }
     }
+    console.warn(`[Storage] Write failed for "${key}":`, err);
     return false;
   }
 };

@@ -1,5 +1,6 @@
 """Authentication API endpoints for LiquiFi — login, refresh, logout, user info."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -27,6 +28,8 @@ from models.user import (
     change_password,
     update_user,
 )
+
+logger = logging.getLogger("liquifi.auth.router")
 
 # ---------------------------------------------------------------------------
 # Router setup
@@ -185,9 +188,12 @@ async def login(
     # Create tokens
     response_data, refresh_token = _create_token_response(user, set_cookie=True)
     
-    # Create response and set cookie
-    response = Response(content=response_data.model_dump_json() if hasattr(response_data, 'model_dump_json') else str(response_data))
-    response = TokenResponse(**response_data)
+    # Build the JSON response and set refresh token cookie on it
+    from fastapi.responses import JSONResponse
+    token_body = TokenResponse(**response_data)
+    response = JSONResponse(content=token_body.model_dump())
+    if refresh_token:
+        auth.set_refresh_cookie(response, refresh_token)
     
     return response
 
@@ -307,8 +313,8 @@ async def logout(
         jti = payload.get("jti")
         if jti:
             auth.revoke_token(jti)
-    except Exception:
-        pass  # Continue even if token is already invalid
+    except Exception as e:
+        logger.warning("Failed to revoke access token during logout: %s", e)
     
     # Try to revoke refresh token from cookie
     refresh_token = auth.extract_token_from_cookie(request, "refresh_token")
@@ -318,8 +324,8 @@ async def logout(
             jti = payload.get("jti")
             if jti:
                 auth.revoke_token(jti)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to revoke refresh token during logout: %s", e)
     
     # Clear the refresh cookie
     auth.clear_refresh_cookie(response)

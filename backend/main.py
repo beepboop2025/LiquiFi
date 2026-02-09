@@ -1,6 +1,7 @@
 """LiquiFi FastAPI backend — real-time Indian money market rates + ML forecasting."""
 
 import asyncio
+import hmac
 import json
 import logging
 import time
@@ -103,17 +104,28 @@ async def lifespan(app: FastAPI):
     # Start background loops
     rate_task = asyncio.create_task(_rate_loop())
     retrain_check_task = asyncio.create_task(_auto_retrain_check_loop())
-    yield
-    rate_task.cancel()
-    retrain_check_task.cancel()
     try:
-        await rate_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await retrain_check_task
-    except asyncio.CancelledError:
-        pass
+        yield
+    finally:
+        rate_task.cancel()
+        retrain_check_task.cancel()
+        try:
+            await rate_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await retrain_check_task
+        except asyncio.CancelledError:
+            pass
+        # Close all WebSocket connections on shutdown
+        async with _clients_lock:
+            for ws in list(connected_clients):
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+            connected_clients.clear()
+        logger.info("Lifespan shutdown complete: tasks cancelled, WebSocket connections closed")
 
 
 app = FastAPI(title="LiquiFi Backend", version="2.0.0", lifespan=lifespan)
@@ -131,7 +143,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -190,10 +202,12 @@ async def _rate_loop():
 
         if did_scrape:
             try:
-                latest_raw = rate_manager.get_rate_buffer()[-1]
-                wrote = append_live_snapshot(latest_raw)
-                if wrote:
-                    _last_live_append_ts = datetime.now(timezone.utc).isoformat()
+                rate_buffer = rate_manager.get_rate_buffer()
+                if rate_buffer:
+                    latest_raw = rate_buffer[-1]
+                    wrote = append_live_snapshot(latest_raw)
+                    if wrote:
+                        _last_live_append_ts = datetime.now(timezone.utc).isoformat()
             except Exception as exc:
                 logger.warning("Live snapshot append failed: %s", exc, exc_info=True)
 
@@ -227,19 +241,23 @@ async def _rate_loop():
         })
 
         # Push to all connected WebSocket clients (concurrently)
+        # Snapshot clients under lock, then release lock for I/O
         async with _clients_lock:
-            if connected_clients:
-                results = await asyncio.gather(
-                    *[_safe_send(ws, payload) for ws in connected_clients],
-                    return_exceptions=True,
-                )
-                disconnected = {
-                    ws for ws, result in zip(connected_clients, results)
-                    if isinstance(result, Exception) or result is False
-                }
-                connected_clients.difference_update(disconnected)
-                if disconnected:
-                    logger.info("Removed %d disconnected WebSocket clients", len(disconnected))
+            clients_snapshot = list(connected_clients)
+
+        if clients_snapshot:
+            results = await asyncio.gather(
+                *[_safe_send(ws, payload) for ws in clients_snapshot],
+                return_exceptions=True,
+            )
+            disconnected = {
+                ws for ws, result in zip(clients_snapshot, results)
+                if isinstance(result, Exception) or result is False
+            }
+            if disconnected:
+                async with _clients_lock:
+                    connected_clients.difference_update(disconnected)
+                logger.info("Removed %d disconnected WebSocket clients", len(disconnected))
 
         await asyncio.sleep(config.RATE_PUSH_INTERVAL_S)
 
@@ -292,6 +310,9 @@ async def _safe_send(ws: WebSocket, payload: str) -> bool:
 # ---------------------------------------------------------------------------
 # WebSocket
 # ---------------------------------------------------------------------------
+_WS_IDLE_TIMEOUT_S = 300  # 5 minutes
+
+
 @app.websocket("/ws/rates")
 async def ws_rates(ws: WebSocket):
     await ws.accept()
@@ -300,7 +321,12 @@ async def ws_rates(ws: WebSocket):
     logger.info("WebSocket client connected (%d total)", len(connected_clients))
     try:
         while True:
-            await ws.receive_text()
+            try:
+                await asyncio.wait_for(ws.receive_text(), timeout=_WS_IDLE_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.info("WebSocket client idle for %ds — closing", _WS_IDLE_TIMEOUT_S)
+                await ws.close(code=1000, reason="Idle timeout")
+                break
     except WebSocketDisconnect:
         logger.debug("WebSocket client disconnected normally")
     except Exception as exc:
@@ -459,7 +485,7 @@ async def model_performance():
 async def retrain(x_api_key: str = Header(default="")):
     global _model_loaded, _models_loaded, _retrain_in_progress
 
-    if not config.RETRAIN_API_KEY or x_api_key != config.RETRAIN_API_KEY:
+    if not config.RETRAIN_API_KEY or not hmac.compare_digest(x_api_key, config.RETRAIN_API_KEY):
         logger.warning("Retrain attempt with invalid API key")
         return JSONResponse(status_code=401, content={"status": "error", "message": "Invalid or missing X-Api-Key header."})
 

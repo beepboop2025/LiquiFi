@@ -26,7 +26,7 @@ export default function TabSettings({ backend, onToggleKillSwitch, onToggleFailo
           <StatBox label="Circuit Breaker" value={backend.circuitOpen ? "OPEN" : "CLOSED"} sub={backend.circuitOpenedAt ? `Opened at ${backend.circuitOpenedAt}` : "Healthy"} color={backend.circuitOpen ? "var(--red)" : "var(--green)"} icon={Shield} small />
           <StatBox label="Queue Depth" value={`${backend.queueDepth}`} sub="Execution messages pending" color={backend.queueDepth > 20 ? "var(--amber)" : "var(--cyan)"} icon={Layers} small />
           <StatBox label="Throughput" value={`${backend.throughputPerMin}/min`} sub="Settlements + orders" color="var(--blue)" icon={Activity} small />
-          <StatBox label="P99 Latency" value={`${backend.apiLatencyP99.toFixed(0)}ms`} sub={`${backend.failoverMode.toUpperCase()} failover`} color={backend.apiLatencyP99 > 45 ? "var(--amber)" : "var(--green)"} icon={Clock} small />
+          <StatBox label="P99 Latency" value={`${(backend.apiLatencyP99 ?? 0).toFixed(0)}ms`} sub={`${backend.failoverMode.toUpperCase()} failover`} color={(backend.apiLatencyP99 ?? 0) > 45 ? "var(--amber)" : "var(--green)"} icon={Clock} small />
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn-ghost" onClick={onToggleKillSwitch}>

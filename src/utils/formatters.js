@@ -31,4 +31,4 @@ export const formatLatency = (latency) => (latency == null ? "N/A" : `${(Number(
  * @param {number} uptime
  * @returns {string}
  */
-export const formatUptime = (uptime) => `${uptime.toFixed(2)}%`;
+export const formatUptime = (uptime) => `${(Number(uptime) || 0).toFixed(2)}%`;

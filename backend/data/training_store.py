@@ -7,6 +7,7 @@ import csv
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,17 @@ from data.validation import check_data_quality
 logger = logging.getLogger("liquifi.training")
 
 _LAST_APPEND_TS: dict[str, float] = {}
+_csv_write_lock = threading.Lock()
+
+
+def _safe_float(value, default: float) -> float:
+    """Safely convert a value to float, returning default if None or invalid."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 _LIVE_COLS = [
     "timestamp",
@@ -157,31 +169,33 @@ def append_live_snapshot(
         "timestamp": now.isoformat(),
         "date": now.date().isoformat(),
         "hour": int(now.hour),
-        "mibor": float(snapshot.get("mibor_overnight", config.BASE_RATES["mibor_overnight"])),
-        "repo": float(snapshot.get("repo", config.BASE_RATES["repo"])),
-        "cblo": float(snapshot.get("cblo_bid", config.BASE_RATES["cblo_bid"])),
-        "usdinr": float(snapshot.get("usdinr_spot", config.BASE_RATES["usdinr_spot"])),
-        "gsec": float(snapshot.get("gsec_10y", config.BASE_RATES["gsec_10y"])),
-        "call_avg": float(
-            (snapshot.get("call_money_high", config.BASE_RATES["call_money_high"])
-             + snapshot.get("call_money_low", config.BASE_RATES["call_money_low"])) / 2
+        "mibor": _safe_float(snapshot.get("mibor_overnight"), config.BASE_RATES["mibor_overnight"]),
+        "repo": _safe_float(snapshot.get("repo"), config.BASE_RATES["repo"]),
+        "cblo": _safe_float(snapshot.get("cblo_bid"), config.BASE_RATES["cblo_bid"]),
+        "usdinr": _safe_float(snapshot.get("usdinr_spot"), config.BASE_RATES["usdinr_spot"]),
+        "gsec": _safe_float(snapshot.get("gsec_10y"), config.BASE_RATES["gsec_10y"]),
+        "call_avg": _safe_float(
+            (_safe_float(snapshot.get("call_money_high"), config.BASE_RATES["call_money_high"])
+             + _safe_float(snapshot.get("call_money_low"), config.BASE_RATES["call_money_low"])) / 2,
+            (config.BASE_RATES["call_money_high"] + config.BASE_RATES["call_money_low"]) / 2
         ),
-        "balance": float(snapshot.get("_balance", 245.0)),
+        "balance": _safe_float(snapshot.get("_balance"), 245.0),
     }
 
     # Write to DB if available (only for the default path)
     if _use_db() and path == config.LIVE_SNAPSHOT_PATH:
         _db_append_live(row)
 
-    # Always write CSV as fallback
+    # Always write CSV as fallback (locked to prevent TOCTOU race)
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    write_header = not p.exists() or p.stat().st_size == 0
-    with p.open("a", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=_LIVE_COLS)
-        if write_header:
-            writer.writeheader()
-        writer.writerow(row)
+    with _csv_write_lock:
+        write_header = not p.exists() or p.stat().st_size == 0
+        with p.open("a", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=_LIVE_COLS)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
     _LAST_APPEND_TS[path] = ts_epoch
     return True
 

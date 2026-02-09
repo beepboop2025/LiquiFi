@@ -8,9 +8,9 @@ services:
     image: postgres:15-alpine
     container_name: liquifi-postgres-dev
     environment:
-      POSTGRES_USER: liquifi_dev
-      POSTGRES_PASSWORD: devpassword
-      POSTGRES_DB: liquifi_dev
+      POSTGRES_USER: ${POSTGRES_USER:-liquifi_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-liquifi_dev}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     ports:
@@ -18,7 +18,7 @@ services:
     networks:
       - liquifi-dev-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U liquifi_dev -d liquifi_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-liquifi_dev} -d ${POSTGRES_DB:-liquifi_dev}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,12 +54,12 @@ services:
       LIQUIFI_REQUIRE_HTTPS: "false"
       
       # Database Configuration
-      DATABASE_URL: postgresql://liquifi_dev:devpassword@postgres:5432/liquifi_dev
+      DATABASE_URL: postgresql://${POSTGRES_USER:-liquifi_dev}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:-liquifi_dev}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_USER: liquifi_dev
-      POSTGRES_PASSWORD: devpassword
-      POSTGRES_DB: liquifi_dev
+      POSTGRES_USER: ${POSTGRES_USER:-liquifi_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-liquifi_dev}
       
       # Redis Configuration
       REDIS_URL: redis://redis:6379/0

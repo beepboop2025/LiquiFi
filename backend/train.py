@@ -216,7 +216,7 @@ def _train_single_model(
     """Train one model and return best checkpoint + metrics."""
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     criterion = nn.SmoothL1Loss()
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=12, factor=0.5)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=12, factor=0.5, min_lr=1e-6)
 
     best_rmse = float("inf")
     best_epoch = 0
@@ -564,18 +564,23 @@ def run_training(
                 f"Beats naive: {result['beats_naive']}"
             )
 
-    # 8. Compute ensemble weights from inverse RMSE
+    # 8. Compute ensemble weights from inverse RMSE (clamped to prevent domination)
     ensemble_weights = {}
     for name, res in results.items():
         if res["model_metrics"]:
-            rmse = res["model_metrics"]["rmse"]
-            if rmse > 0:
-                ensemble_weights[name] = 1.0 / rmse
+            rmse = max(res["model_metrics"]["rmse"], 0.01)  # floor to prevent extreme weights
+            ensemble_weights[name] = 1.0 / rmse
 
     total_w = sum(ensemble_weights.values())
     if total_w > 0:
         for name in ensemble_weights:
-            ensemble_weights[name] = round(ensemble_weights[name] / total_w, 4)
+            raw = ensemble_weights[name] / total_w
+            ensemble_weights[name] = round(min(raw, 0.8), 4)  # cap any single model at 80%
+        # Re-normalize after capping
+        cap_total = sum(ensemble_weights.values())
+        if cap_total > 0:
+            for name in ensemble_weights:
+                ensemble_weights[name] = round(ensemble_weights[name] / cap_total, 4)
 
     os.makedirs(os.path.dirname(config.ENSEMBLE_WEIGHTS_PATH), exist_ok=True)
     with open(config.ENSEMBLE_WEIGHTS_PATH, "w") as f:

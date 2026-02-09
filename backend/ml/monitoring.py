@@ -145,7 +145,7 @@ class MetricsCollector:
             "count": len(predictions),
             "rmse": float(np.sqrt(np.mean(errors ** 2))),
             "mae": float(np.mean(np.abs(errors))),
-            "mape": float(np.mean(np.abs(errors / actual_values)) * 100),
+            "mape": float(np.mean(np.abs(errors / np.where(actual_values == 0, 1.0, actual_values))) * 100),
             "bias": float(np.mean(errors)),
             "r2": float(1 - np.sum(errors ** 2) / np.sum((actual_values - np.mean(actual_values)) ** 2)),
         }
@@ -239,17 +239,29 @@ class DriftDetector:
         method: str = "iqr",
     ) -> np.ndarray:
         """Detect anomalous values."""
+        # Filter out NaN values - mark them as anomalies
+        nan_mask = np.isnan(values)
+        if nan_mask.all():
+            return np.ones(len(values), dtype=bool)
+        clean_values = values[~nan_mask]
+
         if method == "iqr":
-            q1 = np.percentile(values, 25)
-            q3 = np.percentile(values, 75)
+            q1 = np.percentile(clean_values, 25)
+            q3 = np.percentile(clean_values, 75)
             iqr = q3 - q1
             lower = q1 - 1.5 * iqr
             upper = q3 + 1.5 * iqr
-            return (values < lower) | (values > upper)
-            
+            result = (values < lower) | (values > upper)
+            result[nan_mask] = True
+            return result
+
         elif method == "zscore":
-            z_scores = np.abs((values - np.mean(values)) / (np.std(values) + 1e-6))
-            return z_scores > 3
+            mean = np.mean(clean_values)
+            std = np.std(clean_values) + 1e-6
+            z_scores = np.abs((values - mean) / std)
+            result = z_scores > 3
+            result[nan_mask] = True
+            return result
             
         else:
             raise ValueError(f"Unknown anomaly detection method: {method}")
@@ -278,8 +290,11 @@ class AlertManager:
     def _save_alert(self, alert: Alert) -> None:
         """Save alert to disk."""
         alert_file = self.alerts_dir / f"alert_{alert.alert_id}.json"
-        with open(alert_file, "w") as f:
-            json.dump(asdict(alert), f, indent=2)
+        try:
+            with open(alert_file, "w") as f:
+                json.dump(asdict(alert), f, indent=2)
+        except OSError as exc:
+            logger.error("Failed to save alert %s: %s", alert.alert_id, exc)
             
     def add_handler(self, handler: Callable[[Alert], None]) -> None:
         """Add an alert handler."""

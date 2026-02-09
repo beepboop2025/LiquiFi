@@ -69,7 +69,21 @@ class TrainingConfig:
     early_stopping_patience: int = 20
     target_mode: str = "delta"
     use_scheduler: bool = True
-    
+
+    def __post_init__(self):
+        if self.model_type not in ("lstm", "gru", "transformer"):
+            raise ValueError(f"Unknown model_type: {self.model_type}")
+        if not (1 <= self.epochs <= 10000):
+            raise ValueError(f"epochs must be in [1, 10000], got {self.epochs}")
+        if not (1e-6 <= self.learning_rate <= 1.0):
+            raise ValueError(f"learning_rate must be in [1e-6, 1.0], got {self.learning_rate}")
+        if not (1 <= self.batch_size <= 4096):
+            raise ValueError(f"batch_size must be in [1, 4096], got {self.batch_size}")
+        if not (0.0 <= self.dropout < 1.0):
+            raise ValueError(f"dropout must be in [0, 1), got {self.dropout}")
+        if self.target_mode not in ("absolute", "delta"):
+            raise ValueError(f"Unknown target_mode: {self.target_mode}")
+
     def to_dict(self) -> Dict:
         return asdict(self)
 
@@ -376,7 +390,7 @@ class AutomatedTrainingPipeline:
         )
         criterion = nn.SmoothL1Loss()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, patience=cfg.early_stopping_patience // 2, factor=0.5
+            optimizer, patience=cfg.early_stopping_patience // 2, factor=0.5, min_lr=1e-6
         )
         
         # Training loop

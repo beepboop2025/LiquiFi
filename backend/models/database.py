@@ -23,7 +23,14 @@ _engine_kwargs = {
 }
 # Only add connection pool settings for non-SQLite databases
 if not DATABASE_URL.startswith("sqlite"):
-    _engine_kwargs.update(pool_pre_ping=True, pool_size=10, max_overflow=20)
+    is_prod = os.getenv("LIQUIFI_ENV") == "production"
+    _engine_kwargs.update(
+        pool_pre_ping=True,
+        pool_size=50 if is_prod else 10,
+        max_overflow=100 if is_prod else 20,
+        pool_recycle=3600,
+        isolation_level="REPEATABLE_READ",
+    )
 else:
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 

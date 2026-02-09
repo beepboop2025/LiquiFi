@@ -10,6 +10,7 @@ dS = mu * S * dt + sigma * S * dW
 
 import logging
 import os
+import threading
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ logger = logging.getLogger("liquifi.monte_carlo")
 _calibration_cache: dict | None = None
 _calibration_ts: float = 0.0
 _CACHE_TTL_S = 300  # re-calibrate every 5 minutes
+_calibration_lock = threading.Lock()
 
 
 def _calibrate_from_real_data() -> tuple[float, float, float]:
@@ -33,8 +35,9 @@ def _calibrate_from_real_data() -> tuple[float, float, float]:
     import time
 
     now = time.time()
-    if _calibration_cache is not None and (now - _calibration_ts) < _CACHE_TTL_S:
-        return _calibration_cache
+    with _calibration_lock:
+        if _calibration_cache is not None and (now - _calibration_ts) < _CACHE_TTL_S:
+            return _calibration_cache
 
     # Try data sources in priority order
     paths = [
@@ -77,8 +80,9 @@ def _calibrate_from_real_data() -> tuple[float, float, float]:
                 path, mu, sigma, initial_balance, len(balance),
             )
             result = (mu, sigma, initial_balance)
-            _calibration_cache = result
-            _calibration_ts = now
+            with _calibration_lock:
+                _calibration_cache = result
+                _calibration_ts = now
             return result
 
         except Exception as exc:
@@ -88,8 +92,9 @@ def _calibrate_from_real_data() -> tuple[float, float, float]:
     # Fallback defaults
     logger.warning("No real data for MC calibration — using defaults")
     result = (0.02, 0.08, 245.0)
-    _calibration_cache = result
-    _calibration_ts = now
+    with _calibration_lock:
+        _calibration_cache = result
+        _calibration_ts = now
     return result
 
 

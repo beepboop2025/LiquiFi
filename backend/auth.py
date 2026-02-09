@@ -1,6 +1,7 @@
 """Core authentication module for LiquiFi — JWT tokens, password hashing, and user auth."""
 
 import os
+import threading
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -180,30 +181,34 @@ def refresh_access_token(
 # ---------------------------------------------------------------------------
 _revoked_tokens: set[str] = set()
 _revoked_at: dict[str, datetime] = {}
+_revoked_lock = threading.RLock()
 
 
 def revoke_token(jti: str) -> None:
     """Revoke a token by its JTI (JWT ID)."""
-    _revoked_tokens.add(jti)
-    _revoked_at[jti] = datetime.now(timezone.utc)
+    with _revoked_lock:
+        _revoked_tokens.add(jti)
+        _revoked_at[jti] = datetime.now(timezone.utc)
 
 
 def is_token_revoked(jti: str) -> bool:
     """Check if a token has been revoked."""
-    return jti in _revoked_tokens
+    with _revoked_lock:
+        return jti in _revoked_tokens
 
 
 def cleanup_revoked_tokens(max_age_hours: int = 24) -> int:
     """Clean up old revoked tokens to prevent memory bloat."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
-    to_remove = [
-        jti for jti, revoked_at in _revoked_at.items()
-        if revoked_at < cutoff
-    ]
-    for jti in to_remove:
-        _revoked_tokens.discard(jti)
-        del _revoked_at[jti]
-    return len(to_remove)
+    with _revoked_lock:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        to_remove = [
+            jti for jti, revoked_at in list(_revoked_at.items())
+            if revoked_at < cutoff
+        ]
+        for jti in to_remove:
+            _revoked_tokens.discard(jti)
+            del _revoked_at[jti]
+        return len(to_remove)
 
 
 # ---------------------------------------------------------------------------

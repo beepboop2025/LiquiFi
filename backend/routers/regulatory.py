@@ -11,6 +11,7 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from models.database import get_db
+from middleware.auth import get_current_user
 from models.regulatory import (
     ALMBucket,
     BankConfig,
@@ -206,7 +207,7 @@ def get_slr_history(days: int = Query(default=90, ge=1, le=365), db: Session = D
 # ---------------------------------------------------------------------------
 # Config Update
 # ---------------------------------------------------------------------------
-@router.put("/config")
+@router.put("/config", dependencies=[Depends(get_current_user)])
 def update_config(update: ConfigUpdate, db: Session = Depends(get_db)):
     """Update NDTL / rates (admin only)."""
     config = db.query(BankConfig).first()
@@ -305,7 +306,7 @@ def get_alm_liquidity(db: Session = Depends(get_db)):
     }
 
 
-@router.put("/alm/buckets")
+@router.put("/alm/buckets", dependencies=[Depends(get_current_user)])
 def update_alm_buckets(buckets: list[BucketUpdate], db: Session = Depends(get_db)):
     """Update bucket data."""
     today = date.today()
@@ -451,7 +452,7 @@ def get_branch_detail(code: str, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # Reports
 # ---------------------------------------------------------------------------
-@router.post("/reports/generate")
+@router.post("/reports/generate", dependencies=[Depends(get_current_user)])
 def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
     """Generate Form A / Form VIII / ALM Statement."""
     if req.report_type == "form_a":
@@ -513,7 +514,11 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    data = json.loads(report.data_json) if report.data_json else {}
+    try:
+        data = json.loads(report.data_json) if report.data_json else {}
+    except json.JSONDecodeError:
+        logger.warning("Invalid JSON in report %d data_json, defaulting to empty dict", report_id)
+        data = {}
     return {
         "id": report.id,
         "report_type": report.report_type,
@@ -532,7 +537,11 @@ def export_report(report_id: int, db: Session = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    data = json.loads(report.data_json) if report.data_json else {}
+    try:
+        data = json.loads(report.data_json) if report.data_json else {}
+    except json.JSONDecodeError:
+        logger.warning("Invalid JSON in report %d data_json for export, defaulting to empty dict", report_id)
+        data = {}
     return JSONResponse(
         content=data,
         headers={

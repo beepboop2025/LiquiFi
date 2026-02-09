@@ -41,8 +41,13 @@ export default function TabBranches() {
       return;
     }
     setSelectedBranch(code);
-    const detail = await fetchBranchDetail(code);
-    if (detail) setBranchHistory(detail);
+    try {
+      const detail = await fetchBranchDetail(code);
+      if (detail) setBranchHistory(detail);
+    } catch (err) {
+      console.error("[TabBranches] Failed to fetch branch detail:", err);
+      setBranchHistory([]);
+    }
   }, [selectedBranch]);
 
   // Compute totals from branches if not from backend
@@ -91,7 +96,7 @@ export default function TabBranches() {
                 <div>
                   <div style={{ fontSize: 9, color: "var(--text-4)" }}>P&L</div>
                   <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: data.pnl >= 0 ? "var(--green)" : "var(--red)" }}>
-                    {data.pnl >= 0 ? "+" : ""}₹{data.pnl?.toFixed(1)} Cr
+                    {(data.pnl ?? 0) >= 0 ? "+" : ""}₹{(data.pnl ?? 0).toFixed(1)} Cr
                   </div>
                 </div>
               </div>

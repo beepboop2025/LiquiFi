@@ -4,7 +4,7 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 export class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, retryCount: 0 };
   }
 
   static getDerivedStateFromError(error) {
@@ -16,7 +16,8 @@ export class ErrorBoundary extends Component {
   }
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: null });
+    if (this.state.retryCount >= 3) return;
+    this.setState((prev) => ({ hasError: false, error: null, retryCount: prev.retryCount + 1 }));
   };
 
   render() {
@@ -30,9 +31,13 @@ export class ErrorBoundary extends Component {
           <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16, maxWidth: 400, margin: "0 auto 16px" }}>
             {this.state.error?.message || "An unexpected error occurred in this section."}
           </p>
-          <button className="btn-ghost" onClick={this.handleRetry} style={{ margin: "0 auto" }}>
-            <RotateCcw size={12} /> Retry
-          </button>
+          {this.state.retryCount < 3 ? (
+            <button className="btn-ghost" onClick={this.handleRetry} style={{ margin: "0 auto" }}>
+              <RotateCcw size={12} /> Retry
+            </button>
+          ) : (
+            <p style={{ fontSize: 11, color: "var(--text-4)" }}>Max retries reached. Please reload the page.</p>
+          )}
         </div>
       );
     }

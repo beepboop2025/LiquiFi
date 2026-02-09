@@ -12,6 +12,9 @@ from sqlalchemy.sql import func
 
 import auth
 
+import logging
+logger = logging.getLogger("liquifi.user")
+
 # SQLAlchemy Base — use shared base if exists, otherwise create one
 try:
     from models.database import Base
@@ -280,7 +283,13 @@ def create_default_admin(db: Session) -> Optional[User]:
     
     import os
     admin_email = os.getenv("LIQUIFI_ADMIN_EMAIL", "admin@liquifi.local")
-    admin_password = os.getenv("LIQUIFI_ADMIN_PASSWORD", "admin123")
+    admin_password = os.getenv("LIQUIFI_ADMIN_PASSWORD", "")
+    if not admin_password:
+        if os.getenv("LIQUIFI_ENV", "development") == "production":
+            raise ValueError("LIQUIFI_ADMIN_PASSWORD must be set in production")
+        import secrets
+        admin_password = secrets.token_urlsafe(16)
+        logger.warning("Generated random admin password: %s (set LIQUIFI_ADMIN_PASSWORD to override)", admin_password)
     
     admin = User(
         email=admin_email,
