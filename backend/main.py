@@ -152,12 +152,14 @@ app.add_middleware(
 # HTTPS enforcement middleware (production)
 # ---------------------------------------------------------------------------
 if config.REQUIRE_HTTPS:
+    _HTTPS_EXEMPT = {"/api/health"}
+
     @app.middleware("http")
     async def enforce_https(request: Request, call_next):
-        if request.url.scheme != "https" and request.url.path.startswith("/api/model"):
+        if request.url.scheme != "https" and request.url.path not in _HTTPS_EXEMPT:
             return JSONResponse(
                 status_code=403,
-                content={"status": "error", "message": "HTTPS required for sensitive endpoints."},
+                content={"status": "error", "message": "HTTPS required."},
             )
         return await call_next(request)
 

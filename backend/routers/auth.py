@@ -1,6 +1,8 @@
 """Authentication API endpoints for LiquiFi — login, refresh, logout, user info."""
 
 import logging
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -8,6 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
+
+# Simple in-process rate limiter for registration (max 3 per minute per IP)
+_register_timestamps: dict[str, deque] = defaultdict(deque)
+_REGISTER_MAX_PER_MIN = 3
 
 import auth
 import config
@@ -107,6 +113,11 @@ class RefreshResponse(BaseModel):
 class MessageResponse(BaseModel):
     """Simple message response."""
     message: str
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for self-service profile update (restricted fields)."""
+    full_name: Optional[str] = None
 
 
 class UserProfileResponse(UserResponse):
@@ -367,30 +378,28 @@ async def get_me(
     summary="Update current user profile"
 )
 async def update_me(
-    user_update: dict,
+    user_update: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Update the current user's profile information.
-    
-    Users can update their own profile but not their role or active status.
+
+    Users can update their own full_name only — not role or active status.
     """
     from models.user import UserUpdate
-    
-    # Only allow updating certain fields for self
-    allowed_fields = {"full_name"}
-    filtered_data = {k: v for k, v in user_update.items() if k in allowed_fields}
-    
+
+    filtered_data = user_update.model_dump(exclude_unset=True)
+
     if not filtered_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid fields to update",
         )
-    
+
     update_data = UserUpdate(**filtered_data)
     updated_user = update_user(db, current_user, update_data)
-    
+
     return UserResponse.model_validate(updated_user)
 
 
@@ -434,19 +443,33 @@ async def change_password_endpoint(
     description="Create a new user account. May require admin approval based on configuration."
 )
 async def register(
+    request: Request,
     user_data: UserCreate,
     db: Session = Depends(get_db),
 ):
     """
     Register a new user account.
-    
+
     - **email**: Valid email address
     - **password**: Password (min 8 characters)
     - **full_name**: Optional full name
     - **role**: Defaults to 'viewer', may be restricted
-    
+
     The new user will have `is_verified=False` until approved by an admin.
     """
+    # Rate limit by IP
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    ts = _register_timestamps[client_ip]
+    while ts and now - ts[0] > 60:
+        ts.popleft()
+    if len(ts) >= _REGISTER_MAX_PER_MIN:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many registration attempts. Try again later.",
+        )
+    ts.append(now)
+
     # Check if email already exists
     existing = get_user_by_email(db, user_data.email)
     if existing:
@@ -531,13 +554,13 @@ async def get_user(
 )
 async def admin_update_user(
     user_id: str,
-    user_update: dict,
+    user_update: "UserUpdate",
     db: Session = Depends(get_db),
 ):
     """Update any user (admin only)."""
     from uuid import UUID
     from models.user import UserUpdate, deactivate_user, reactivate_user
-    
+
     try:
         user = get_user_by_id(db, UUID(user_id))
     except ValueError:
@@ -545,25 +568,27 @@ async def admin_update_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid user ID format",
         )
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    
+
+    update_fields = user_update.model_dump(exclude_unset=True)
+
     # Handle activation/deactivation separately
-    if "is_active" in user_update:
-        if user_update["is_active"]:
+    if "is_active" in update_fields:
+        if update_fields["is_active"]:
             reactivate_user(db, user)
         else:
             deactivate_user(db, user)
-        del user_update["is_active"]
-    
-    if user_update:
-        update_data = UserUpdate(**user_update)
-        user = update_user(db, user, update_data)
-    
+        del update_fields["is_active"]
+
+    if update_fields:
+        safe_data = UserUpdate(**update_fields)
+        user = update_user(db, user, safe_data)
+
     return UserResponse.model_validate(user)
 
 

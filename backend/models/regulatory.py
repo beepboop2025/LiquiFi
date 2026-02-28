@@ -8,7 +8,7 @@ Aligned with:
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum as PyEnum
 
 from sqlalchemy import (
@@ -63,7 +63,7 @@ class BankConfig(Base):
     sdf_rate = Column(Float, nullable=False, default=5.00)
     msf_rate = Column(Float, nullable=False, default=5.50)
     bank_rate = Column(Float, nullable=False, default=5.50)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ class RegulatoryReport(Base):
     report_type = Column(String(30), nullable=False)  # form_a, form_viii, alm_statement
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
-    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     status = Column(String(20), nullable=False, default="draft")  # draft, submitted, archived
     data_json = Column(Text, nullable=True)  # Full report data as JSON
 

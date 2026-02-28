@@ -11,7 +11,7 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from models.database import get_db
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, require_admin, require_analyst
 from models.regulatory import (
     ALMBucket,
     BankConfig,
@@ -33,12 +33,24 @@ router = APIRouter(prefix="/api/regulatory", tags=["regulatory"])
 # Schemas
 # ---------------------------------------------------------------------------
 class ConfigUpdate(BaseModel):
-    ndtl: float | None = None
-    crr_rate: float | None = None
-    slr_rate: float | None = None
-    repo_rate: float | None = None
-    sdf_rate: float | None = None
-    msf_rate: float | None = None
+    ndtl: float | None = None  # NDTL in crores, must be positive
+    crr_rate: float | None = None  # CRR rate % (RBI: 0-15%)
+    slr_rate: float | None = None  # SLR rate % (RBI: 0-40%)
+    repo_rate: float | None = None  # Repo rate % (0-20%)
+    sdf_rate: float | None = None  # SDF rate % (0-20%)
+    msf_rate: float | None = None  # MSF rate % (0-20%)
+
+    def validate_bounds(self) -> None:
+        """Validate financial rate bounds to prevent data corruption."""
+        if self.ndtl is not None and self.ndtl <= 0:
+            raise ValueError("NDTL must be positive")
+        for field, lo, hi in [
+            ("crr_rate", 0, 15), ("slr_rate", 0, 40),
+            ("repo_rate", 0, 20), ("sdf_rate", 0, 20), ("msf_rate", 0, 20),
+        ]:
+            val = getattr(self, field)
+            if val is not None and not (lo <= val <= hi):
+                raise ValueError(f"{field} must be between {lo}% and {hi}%")
 
 
 class ReportRequest(BaseModel):
@@ -58,7 +70,7 @@ class BucketUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
-@router.get("/dashboard")
+@router.get("/dashboard", dependencies=[Depends(get_current_user)])
 def get_dashboard(db: Session = Depends(get_db)):
     """Full regulatory dashboard data — CRR + SLR + LCR + NSFR summary."""
     config = db.query(BankConfig).first()
@@ -150,7 +162,7 @@ def get_dashboard(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # CRR/SLR History
 # ---------------------------------------------------------------------------
-@router.get("/crr/history")
+@router.get("/crr/history", dependencies=[Depends(get_current_user)])
 def get_crr_history(days: int = Query(default=90, ge=1, le=365), db: Session = Depends(get_db)):
     """90-day CRR daily positions."""
     cutoff = date.today() - timedelta(days=days)
@@ -175,7 +187,7 @@ def get_crr_history(days: int = Query(default=90, ge=1, le=365), db: Session = D
     }
 
 
-@router.get("/slr/history")
+@router.get("/slr/history", dependencies=[Depends(get_current_user)])
 def get_slr_history(days: int = Query(default=90, ge=1, le=365), db: Session = Depends(get_db)):
     """90-day SLR daily positions."""
     cutoff = date.today() - timedelta(days=days)
@@ -207,9 +219,14 @@ def get_slr_history(days: int = Query(default=90, ge=1, le=365), db: Session = D
 # ---------------------------------------------------------------------------
 # Config Update
 # ---------------------------------------------------------------------------
-@router.put("/config", dependencies=[Depends(get_current_user)])
+@router.put("/config", dependencies=[Depends(require_admin)])
 def update_config(update: ConfigUpdate, db: Session = Depends(get_db)):
     """Update NDTL / rates (admin only)."""
+    try:
+        update.validate_bounds()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     config = db.query(BankConfig).first()
     if not config:
         raise HTTPException(status_code=404, detail="Bank configuration not found")
@@ -234,7 +251,7 @@ def update_config(update: ConfigUpdate, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # ALM
 # ---------------------------------------------------------------------------
-@router.get("/alm/current")
+@router.get("/alm/current", dependencies=[Depends(get_current_user)])
 def get_alm_current(db: Session = Depends(get_db)):
     """Current ALM gap analysis (10 buckets)."""
     # Find latest snapshot date
@@ -276,7 +293,7 @@ def get_alm_current(db: Session = Depends(get_db)):
     return {"buckets": bucket_data, "snapshot_date": latest_date.isoformat()}
 
 
-@router.get("/alm/liquidity")
+@router.get("/alm/liquidity", dependencies=[Depends(get_current_user)])
 def get_alm_liquidity(db: Session = Depends(get_db)):
     """LCR and NSFR metrics."""
     liquidity = (
@@ -306,7 +323,7 @@ def get_alm_liquidity(db: Session = Depends(get_db)):
     }
 
 
-@router.put("/alm/buckets", dependencies=[Depends(get_current_user)])
+@router.put("/alm/buckets", dependencies=[Depends(require_admin)])
 def update_alm_buckets(buckets: list[BucketUpdate], db: Session = Depends(get_db)):
     """Update bucket data."""
     today = date.today()
@@ -338,7 +355,7 @@ def update_alm_buckets(buckets: list[BucketUpdate], db: Session = Depends(get_db
 # ---------------------------------------------------------------------------
 # Branches
 # ---------------------------------------------------------------------------
-@router.get("/branches")
+@router.get("/branches", dependencies=[Depends(get_current_user)])
 def get_branches(db: Session = Depends(get_db)):
     """All branches with latest positions."""
     branches = db.query(Branch).filter(Branch.is_active == True).all()
@@ -371,7 +388,7 @@ def get_branches(db: Session = Depends(get_db)):
     return {"branches": result}
 
 
-@router.get("/branches/summary")
+@router.get("/branches/summary", dependencies=[Depends(get_current_user)])
 def get_branches_summary(db: Session = Depends(get_db)):
     """Regional aggregation."""
     branches = db.query(Branch).filter(Branch.is_active == True).all()
@@ -411,7 +428,7 @@ def get_branches_summary(db: Session = Depends(get_db)):
     return {"regions": regions, "totals": totals}
 
 
-@router.get("/branches/{code}")
+@router.get("/branches/{code}", dependencies=[Depends(get_current_user)])
 def get_branch_detail(code: str, db: Session = Depends(get_db)):
     """Single branch + 30-day history."""
     branch = db.query(Branch).filter(Branch.code == code).first()
@@ -483,7 +500,7 @@ def generate_report(req: ReportRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Unknown report type: {req.report_type}")
 
 
-@router.get("/reports")
+@router.get("/reports", dependencies=[Depends(get_current_user)])
 def list_reports(db: Session = Depends(get_db)):
     """List generated reports."""
     reports = (
@@ -507,7 +524,7 @@ def list_reports(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/reports/{report_id}")
+@router.get("/reports/{report_id}", dependencies=[Depends(get_current_user)])
 def get_report(report_id: int, db: Session = Depends(get_db)):
     """Get report data."""
     report = db.query(RegulatoryReport).filter(RegulatoryReport.id == report_id).first()
@@ -530,7 +547,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/reports/{report_id}/export")
+@router.get("/reports/{report_id}/export", dependencies=[Depends(get_current_user)])
 def export_report(report_id: int, db: Session = Depends(get_db)):
     """Export report as JSON."""
     report = db.query(RegulatoryReport).filter(RegulatoryReport.id == report_id).first()

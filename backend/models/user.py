@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import Column, String, DateTime, Boolean, Enum, Index
+from sqlalchemy import Column, String, DateTime, Boolean, Enum, Index, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, Session
 from sqlalchemy.sql import func
@@ -64,7 +64,7 @@ class User(Base):
     full_name = Column(String(255), nullable=True)
     
     # Metadata
-    failed_login_attempts = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
     
     # Indexes
     __table_args__ = (
@@ -119,7 +119,7 @@ class User(Base):
     
     def record_failed_login(self, db: Session) -> None:
         """Record a failed login attempt."""
-        self.failed_login_attempts = datetime.now(timezone.utc)
+        self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
         db.commit()
     
     def to_dict(self, include_sensitive: bool = False) -> dict:
@@ -289,7 +289,9 @@ def create_default_admin(db: Session) -> Optional[User]:
             raise ValueError("LIQUIFI_ADMIN_PASSWORD must be set in production")
         import secrets
         admin_password = secrets.token_urlsafe(16)
-        logger.warning("Generated random admin password: %s (set LIQUIFI_ADMIN_PASSWORD to override)", admin_password)
+        logger.warning("Generated random admin password (set LIQUIFI_ADMIN_PASSWORD to override). Password printed to stderr.")
+        import sys
+        print(f"ADMIN PASSWORD: {admin_password}", file=sys.stderr)
     
     admin = User(
         email=admin_email,
