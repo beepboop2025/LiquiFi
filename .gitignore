@@ -53,3 +53,15 @@ review_kimi_update/
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Electron / desktop build
+electron/icon.icns
+dist-electron/
+release/
+build-backend/
+*.dmg
+
+# Generated icon PNGs
+public/icon-192x192.png
+public/icon-512x512.png
+public/apple-touch-icon-180x180.png

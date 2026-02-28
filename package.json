@@ -3,12 +3,26 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "electron .",
+    "electron:start": "BUILD_TARGET=electron vite build && electron .",
+    "electron:prebuild": "rsync -a --exclude='venv' --exclude='__pycache__' --exclude='*.pyc' --exclude='logs' --exclude='metrics' --exclude='data/collected' --exclude='data/_cache' --exclude='tests' backend/ build-backend/",
+    "electron:build": "BUILD_TARGET=electron vite build && npm run electron:prebuild && electron-builder --mac"
   },
   "dependencies": {
+    "@babel/core": "^7.28.6",
+    "@babel/generator": "^7.28.6",
+    "@babel/helper-module-imports": "^7.28.6",
+    "@babel/helper-module-transforms": "^7.28.6",
+    "@babel/helpers": "^7.28.6",
+    "@babel/parser": "^7.28.6",
+    "@babel/template": "^7.28.6",
+    "@babel/traverse": "^7.28.6",
+    "@babel/types": "^7.28.6",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -16,6 +30,30 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0",
     "vite": "^5.4.10"
+  },
+  "build": {
+    "appId": "com.liquifi.treasury",
+    "productName": "LiquiFi",
+    "mac": {
+      "icon": "electron/icon.icns",
+      "target": ["dmg", "dir"],
+      "category": "public.app-category.finance"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build-backend/",
+        "to": "backend/"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    }
   }
 }

@@ -12,3 +12,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </ToastProvider>
   </React.StrictMode>
 );
+
+// Register service worker (skip in Electron — it uses file:// protocol)
+if ('serviceWorker' in navigator && !window.__ELECTRON__) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => console.info('[SW] Registered:', reg.scope))
+      .catch((err) => console.warn('[SW] Registration failed:', err));
+  });
+}

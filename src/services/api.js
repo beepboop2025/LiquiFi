@@ -8,8 +8,29 @@
  * - Data quality metrics from WebSocket stream
  */
 
-const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/rates`;
-const API_BASE = '/api';
+// Electron uses direct URLs since there's no Vite proxy
+const API_BASE = window.__ELECTRON__
+  ? 'http://127.0.0.1:8000/api'
+  : '/api';
+
+const WS_URL = window.__ELECTRON__
+  ? 'ws://127.0.0.1:8000/ws/rates'
+  : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/rates`;
+
+// ---------------------------------------------------------------------------
+// Offline detection
+// ---------------------------------------------------------------------------
+let _offline = !navigator.onLine;
+window.addEventListener('online', () => { _offline = false; });
+window.addEventListener('offline', () => { _offline = true; });
+
+/**
+ * Whether the browser/app is currently offline.
+ * @returns {boolean}
+ */
+export function isOffline() {
+  return _offline;
+}
 
 let _ws = null;
 let _connected = false;
