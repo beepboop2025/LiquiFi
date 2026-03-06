@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>LiquiFi</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #050810;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #06d6e0, #3b82f6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #06d6e0, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 40px;
+    }
+    .progress-track {
+      width: 280px;
+      height: 4px;
+      background: #1e293b;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 30%;
+      background: linear-gradient(90deg, #06d6e0, #3b82f6);
+      border-radius: 2px;
+      animation: slide 1.5s ease-in-out infinite;
+    }
+    @keyframes slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(400%); }
+    }
+    #status {
+      font-size: 12px;
+      color: #64748b;
+      height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">$</div>
+  <h1>LiquiFi</h1>
+  <div class="subtitle">Treasury Automation</div>
+  <div class="progress-track">
+    <div class="progress-bar"></div>
+  </div>
+  <div id="status">Initializing...</div>
+</body>
+</html>

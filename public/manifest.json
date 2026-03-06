@@ -1,0 +1,21 @@
+{
+  "name": "LiquiFi Treasury Automation",
+  "short_name": "LiquiFi",
+  "description": "Real-time Indian money market treasury automation platform",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#06d6e0",
+  "background_color": "#050810",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
