@@ -117,6 +117,20 @@ def scrape_all() -> Dict[str, Any]:
         logger.warning("NSE scraper failed: %s", exc)
         source_log["nse"] = []
 
+    # Source 5: US Fed (SOFR is required for MIFOR calculation)
+    try:
+        us_data = scrape_us_fed()
+        sofr_val = us_data.get("us_sofr")
+        if sofr_val is not None:
+            rates["sofr"] = sofr_val
+            source_log["us_fed"] = ["sofr"]
+            logger.info("US Fed SOFR scraped: %.4f", sofr_val)
+        else:
+            source_log["us_fed"] = []
+    except Exception as exc:
+        logger.warning("US Fed scraper failed (SOFR): %s", exc)
+        source_log["us_fed"] = []
+
     logger.info(
         "Scraping complete. Total fields: %d. Sources: %s",
         len(rates),

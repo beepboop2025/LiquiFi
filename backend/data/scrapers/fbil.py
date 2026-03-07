@@ -79,16 +79,16 @@ def scrape_fbil() -> dict:
             None: "sorr_overnight",
         })
 
-        # T-Bill curve (14 tenors)
+        # T-Bill curve — map tenors to field names matching config.REAL_FIELDS
         _fetch_latest(client, "tbill", rates, {
             "7 Days": "tbill_7d",
             "14 Days": "tbill_14d",
             "1 Month": "tbill_1m",
             "2 Months": "tbill_2m",
-            "3 Months": "tbill_3m",
-            "6 Months": "tbill_6m",
+            "3 Months": "tbill_91d",      # 91-day = 3 months
+            "6 Months": "tbill_182d",     # 182-day = 6 months
             "9 Months": "tbill_9m",
-            "12 Months": "tbill_12m",
+            "12 Months": "tbill_364d",    # 364-day = 12 months
         })
 
         # Reference FX rates

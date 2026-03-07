@@ -148,7 +148,15 @@ class RateManager:
             logger.info("Fields using simulated fallback: %s", self._fallback_fields)
 
         # 2) Derived fields
-        snap["sofr"] = self._real.get("sofr", config.BASE_RATES["sofr"])
+        # SOFR: use scraped value (from FRED via scrape_all), else fallback
+        if "sofr" in self._real:
+            snap["sofr"] = self._real["sofr"]
+        else:
+            snap["sofr"] = self._drift(
+                self._prev_snapshot.get("sofr", config.BASE_RATES["sofr"]),
+                0.01,
+            )
+            self._fallback_fields.append("sofr")
         usdinr = snap["usdinr_spot"]
         fwd_points = config.DERIVED_OFFSETS["usdinr_1m_fwd_points"]
         snap["usdinr_1m_fwd"] = round(usdinr + fwd_points, 4)

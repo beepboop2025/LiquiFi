@@ -41,7 +41,7 @@ RETRAIN_RATE_LIMIT_PER_MIN = int(os.getenv("LIQUIFI_RETRAIN_RATE_LIMIT", "2"))
 # --- Scraping ---
 SCRAPE_INTERVAL_S = 30          # seconds between RBI/CCIL scrapes
 RATE_PUSH_INTERVAL_S = 3        # seconds between WebSocket pushes
-CACHE_TTL_S = 300               # file-cache TTL (5 minutes)
+CACHE_TTL_S = 25                # file-cache TTL (must be < SCRAPE_INTERVAL_S for fresh data)
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "data", "_cache")
 LIVE_SNAPSHOT_PATH = os.path.join(os.path.dirname(__file__), "seed_data", "live_snapshots.csv")
 TRAINING_DATA_PATH = os.path.join(os.path.dirname(__file__), "seed_data", "training_rates.csv")
@@ -164,17 +164,18 @@ ALL_GLOBAL_FIELDS = (
     + GLOBAL_RATE_FIELDS_BIS + GLOBAL_RATE_FIELDS_AKSHARE + GLOBAL_RATE_FIELDS_WB + GLOBAL_RATE_FIELDS_YF
 )
 
-# --- Real fields (scraped from RBI/CCIL/FBIL/NSE) ---
+# --- Real fields (scraped from RBI/CCIL/FBIL/NSE/FRED) ---
 REAL_FIELDS = [
     "repo", "reverse_repo", "tbill_91d", "tbill_182d", "tbill_364d",
     "usdinr_spot", "gsec_10y",
     "call_money_high", "call_money_low",
     "mibor_overnight", "cblo_bid", "cblo_ask",
+    "sofr",
 ]
 
-# --- Derived fields ---
+# --- Derived fields (computed from real/scraped data) ---
 DERIVED_FIELDS = [
-    "sofr", "usdinr_1m_fwd", "mifor_1m", "mifor_3m", "mifor_6m", "mmf_liquid",
+    "usdinr_1m_fwd", "mifor_1m", "mifor_3m", "mifor_6m", "mmf_liquid",
 ]
 
 # --- FRED API key (free from https://fred.stlouisfed.org/docs/api/api_key.html) ---

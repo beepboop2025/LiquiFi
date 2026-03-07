@@ -126,8 +126,8 @@ def _extract_rate(cells: list[str], fx: bool = False) -> float | None:
         cleaned = cell.replace(",", "").replace("%", "").strip()
         try:
             val = float(cleaned)
-            # USD/INR typically 75-95 range; reject values outside
-            if fx and 75 < val < 95:
+            # USD/INR typically 70-110 range; reject values outside
+            if fx and 70 < val < 110:
                 return round(val, 4)
             if not fx and 0 < val < 30:
                 return round(val, 4)
