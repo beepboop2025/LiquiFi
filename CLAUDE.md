@@ -25,7 +25,7 @@ cd backend && python ai_bridge.py diagnose --pretty
 The `ai_bridge.py` script provides a CLI interface for AI tools:
 ```bash
 python backend/ai_bridge.py status       # Health + data quality
-python backend/ai_bridge.py rates        # Current 33-field rate snapshot
+python backend/ai_bridge.py rates        # Current 34-field rate snapshot
 python backend/ai_bridge.py forecast     # LSTM forecast
 python backend/ai_bridge.py quality      # Data quality report
 python backend/ai_bridge.py diagnose     # Full system diagnostic
@@ -53,7 +53,7 @@ python backend/ai_bridge.py export-rates # Export rate history CSV
 
 ## API Endpoints
 - `GET /api/health` — System health with scraping/data quality metrics
-- `GET /api/rates` — Current 33-field rate snapshot + data quality
+- `GET /api/rates` — Current 34-field rate snapshot + data quality
 - `GET /api/forecast` — 24h LSTM forecast
 - `GET /api/monte-carlo` — Monte Carlo simulation
 - `GET /api/cashflow-history` — 90-day cash flow history
@@ -67,7 +67,7 @@ cd backend && python -m pytest tests/ -v
 ```
 
 ## Important Notes
-- Rate data has 33 fields: 12 real (scraped), 6 derived, 15 simulated
+- Rate data has 34 fields: 13 real (scraped), 5 derived, 16 simulated
 - LSTM requires 48-hour sequence (seq_len=48) for inference
 - Training uses temporal split (last 48h holdout) to prevent data leakage
 - WebSocket pushes data quality metrics alongside rates

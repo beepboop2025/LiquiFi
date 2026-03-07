@@ -151,7 +151,7 @@ python multi_ai_collector.py merge
 │   ├── engine/                   # Backend connection, state management
 │   ├── generators/               # Forecast, rates, Monte Carlo (client-side)
 │   ├── constants/                # Rate fields, instruments, regulatory rules
-│   └── services/api.js           # REST + WebSocket client
+│   └── services/api.ts           # REST + WebSocket client
 │
 ├── backend/
 │   ├── main.py                   # FastAPI app + WebSocket server
