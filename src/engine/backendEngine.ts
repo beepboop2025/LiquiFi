@@ -300,8 +300,8 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
 
     const instrument = (EXEC_INSTRUMENTS as readonly string[]).includes(input?.instrument) ? input.instrument : null;
     const side = (EXEC_SIDES as readonly string[]).includes(input?.side) ? input.side : null;
-    const amount = Number(input?.amount);
-    const rate = Number(input?.rate);
+    const amount = Number(input?.amount) || 0;
+    const rate = Number(input?.rate) || 0;
     const idempotencyKey = String(
       (input as unknown as Record<string, unknown>)?.idempotencyKey || options?.idempotencyKey || backendId("idem")
     );
@@ -458,7 +458,7 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
     }
 
     state.rateHistory.push({
-      ts: new Date().toISOString() as unknown as number,
+      ts: Date.now() as number,
       mibor: rates.mibor_overnight,
       repo: rates.repo,
       spread,

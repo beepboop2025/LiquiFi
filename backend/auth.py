@@ -184,11 +184,15 @@ _revoked_at: dict[str, datetime] = {}
 _revoked_lock = threading.RLock()
 
 
+_MAX_REVOKED_TOKENS = 10_000
+
 def revoke_token(jti: str) -> None:
     """Revoke a token by its JTI (JWT ID)."""
     with _revoked_lock:
         _revoked_tokens.add(jti)
         _revoked_at[jti] = datetime.now(timezone.utc)
+        if len(_revoked_tokens) > _MAX_REVOKED_TOKENS:
+            cleanup_revoked_tokens(max_age_hours=REFRESH_TOKEN_EXPIRE_DAYS * 24)
 
 
 def is_token_revoked(jti: str) -> bool:

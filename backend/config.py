@@ -10,13 +10,15 @@ logger = logging.getLogger("liquifi.config")
 HOST = os.getenv("LIQUIFI_HOST", "0.0.0.0")
 PORT = int(os.getenv("LIQUIFI_PORT", "8000"))
 
-# CORS — configurable via env; defaults to localhost for development
+# CORS — configurable via env; defaults to localhost for development only
 _cors_env = os.getenv("LIQUIFI_CORS_ORIGINS", "")
-CORS_ORIGINS = (
-    [o.strip() for o in _cors_env.split(",") if o.strip()]
-    if _cors_env
-    else ["http://localhost:5173", "http://localhost:4173", "http://127.0.0.1:5173"]
-)
+if _cors_env:
+    CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
+elif os.getenv("LIQUIFI_ENV", "development") == "production":
+    CORS_ORIGINS: list[str] = []
+    logger.warning("LIQUIFI_CORS_ORIGINS not set in production — CORS will reject all cross-origin requests.")
+else:
+    CORS_ORIGINS = ["http://localhost:5173", "http://localhost:4173", "http://127.0.0.1:5173"]
 
 # API Key — NO hardcoded default. Must be set via env in production.
 RETRAIN_API_KEY = os.getenv("LIQUIFI_RETRAIN_KEY", "")

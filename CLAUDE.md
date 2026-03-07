@@ -41,7 +41,7 @@ python backend/ai_bridge.py export-rates # Export rate history CSV
 - `backend/models/` — Trained model checkpoints
 - `src/components/tabs/` — React tab components
 - `src/engine/` — Frontend order processing engine
-- `src/services/api.js` — WebSocket + REST API client
+- `src/services/api.ts` — WebSocket + REST API client
 
 ## Environment Variables
 - `LIQUIFI_HOST` — Server host (default: 0.0.0.0)

@@ -2,7 +2,7 @@
 
 Real-time treasury management platform that scrapes live money market data from 12 global sources, forecasts liquidity with LSTM/GRU/Transformer ensemble models, and automates regulatory compliance (CRR/SLR/ALM/LCR).
 
-![LiquiFi Dashboard](dashboard-screenshot.png)
+![LiquiFi Dashboard](screenshots/command-center.png)
 
 ### Command Center
 24h liquidity forecast, cash position waterfall, yield attribution, and active alerts.

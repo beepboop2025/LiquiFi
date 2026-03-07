@@ -226,21 +226,26 @@ async def _rate_loop():
         scrape_stats = rate_manager.get_scrape_stats()
         ws_staleness = scrape_stats.get("last_scrape_age_seconds", float("inf"))
 
-        payload = json.dumps({
-            "type": "rates",
-            "data": {
-                "rates": snapshot,
-                "rateHistory": rate_history,
-                "source": source,
-                "dataQuality": {
-                    "realFieldsCount": scrape_stats.get("real_fields_count", 0),
-                    "totalFields": len(config.RATE_FIELDS),
-                    "fallbackFields": scrape_stats.get("fallback_fields", []),
-                    "stalenessSeconds": round(ws_staleness, 1) if ws_staleness != float("inf") else None,
+        try:
+            payload = json.dumps({
+                "type": "rates",
+                "data": {
+                    "rates": snapshot,
+                    "rateHistory": rate_history,
+                    "source": source,
+                    "dataQuality": {
+                        "realFieldsCount": scrape_stats.get("real_fields_count", 0),
+                        "totalFields": len(config.RATE_FIELDS),
+                        "fallbackFields": scrape_stats.get("fallback_fields", []),
+                        "stalenessSeconds": round(ws_staleness, 1) if ws_staleness != float("inf") else None,
+                    },
                 },
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }, allow_nan=False)
+        except (ValueError, TypeError) as exc:
+            logger.warning("WebSocket payload serialization failed (NaN/Inf in data): %s", exc)
+            await asyncio.sleep(config.RATE_PUSH_INTERVAL_S)
+            continue
 
         # Push to all connected WebSocket clients (concurrently)
         # Snapshot clients under lock, then release lock for I/O
@@ -365,7 +370,7 @@ async def health():
     perf_tracker = get_performance_tracker()
     perf_summary = perf_tracker.get_performance_summary()
 
-    return {
+    body = {
         "status": status,
         "model_loaded": _model_loaded,
         "models_loaded": _models_loaded,
@@ -384,6 +389,9 @@ async def health():
         "model_performance": perf_summary,
         "retrain_in_progress": _retrain_in_progress,
     }
+    if status == "degraded":
+        return JSONResponse(status_code=503, content=body)
+    return body
 
 
 @app.get("/api/rates")
@@ -491,17 +499,16 @@ async def retrain(x_api_key: str = Header(default="")):
         logger.warning("Retrain attempt with invalid API key")
         return JSONResponse(status_code=401, content={"status": "error", "message": "Invalid or missing X-Api-Key header."})
 
-    now = time.time()
-    while _retrain_timestamps and now - _retrain_timestamps[0] > 60:
-        _retrain_timestamps.popleft()
-    if len(_retrain_timestamps) >= config.RETRAIN_RATE_LIMIT_PER_MIN:
-        logger.warning("Retrain rate limit exceeded")
-        return JSONResponse(status_code=429, content={"status": "error", "message": "Rate limit exceeded. Max 2 retrain requests per minute."})
-    _retrain_timestamps.append(now)
-
     async with _retrain_lock:
+        now = time.time()
+        while _retrain_timestamps and now - _retrain_timestamps[0] > 60:
+            _retrain_timestamps.popleft()
+        if len(_retrain_timestamps) >= config.RETRAIN_RATE_LIMIT_PER_MIN:
+            logger.warning("Retrain rate limit exceeded")
+            return JSONResponse(status_code=429, content={"status": "error", "message": "Rate limit exceeded. Max 2 retrain requests per minute."})
         if _retrain_in_progress:
             return JSONResponse(status_code=409, content={"status": "error", "message": "Training already in progress."})
+        _retrain_timestamps.append(now)
         _retrain_in_progress = True
 
     async def _do_retrain():

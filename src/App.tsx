@@ -100,7 +100,7 @@ export default function App() {
       failedTx24h,
       successRate: +successRate.toFixed(2),
       apiLatencyP99: +clamp(18 + queueDepth * 1.8 + (snapshot.metrics.circuitState === "open" ? 35 : 0) + rand(-3, 3), 12, 180).toFixed(1),
-      idempotencyKeys: Array.from({ length: Math.min((snapshot as unknown as Record<string, unknown>).processedKeyCount as number || 0, 12) }, (_, i) => `idem-${String(i + 1).padStart(3, "0")}`),
+      idempotencyKeys: Array.from({ length: Math.min(snapshot.processedKeys.size || 0, 12) }, (_, i) => `idem-${String(i + 1).padStart(3, "0")}`),
       orderBook: [...liveOrders, ...prev.orderBook.filter((old) => !liveOrders.some((curr) => curr.id === old.id))].slice(0, 60),
       paymentStreams: opts.skipPayments ? prev.paymentStreams : [createRealtimePayment(), ...prev.paymentStreams].slice(0, 40),
       integrations: prev.integrations.map((sys) => {
@@ -143,9 +143,9 @@ export default function App() {
         setClockData(data);
         setForecastSource("backend");
       }
-    });
-    fetchCashFlowHistory().then((data) => { if (data) setCashFlowHistory(data); });
-    fetchMonteCarlo().then((data) => { if (data) setMcData(data); });
+    }).catch((err) => console.warn("[App] Forecast fetch failed:", err));
+    fetchCashFlowHistory().then((data) => { if (data) setCashFlowHistory(data); }).catch((err) => console.warn("[App] Cash flow fetch failed:", err));
+    fetchMonteCarlo().then((data) => { if (data) setMcData(data); }).catch((err) => console.warn("[App] Monte Carlo fetch failed:", err));
 
     const tickInterval = setInterval(() => {
       if (backendRatesRef.current) {

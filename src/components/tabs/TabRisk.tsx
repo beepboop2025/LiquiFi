@@ -59,15 +59,16 @@ export default function TabRisk({ backend, onExportAuditTrail }: TabRiskProps) {
   const [lcrNsfr, setLcrNsfr] = useState<LcrNsfr>(DEMO_LCR_NSFR);
 
   useEffect(() => {
-    fetchALMCurrent().then((d: AlmBucket[] | null) => { if (d) setAlmData(d); });
-    fetchALMLiquidity().then((d: LcrNsfr | null) => { if (d) setLcrNsfr(d); });
+    fetchALMCurrent().then((d: AlmBucket[] | null) => { if (d) setAlmData(d); }).catch(() => {});
+    fetchALMLiquidity().then((d: LcrNsfr | null) => { if (d) setLcrNsfr(d); }).catch(() => {});
   }, []);
 
   const compliancePasses = COMPLIANCE_ITEMS.filter((item) => item.status === "pass").length;
   const complianceScore = Math.max(90, 100 - (backend.circuitOpen ? 3.5 : 0) - backend.failedTx24h * 0.05);
   const var99 = +(18.5 + backend.failedTx24h * 0.12 + (backend.circuitOpen ? 1.5 : 0)).toFixed(1);
   const expectedShortfall = +(var99 * 1.31).toFixed(1);
-  const concentrationRisk = +(((COUNTERPARTIES.slice(0, 3).reduce((sum, cp) => sum + cp.exposure, 0) / COUNTERPARTIES.reduce((sum, cp) => sum + cp.exposure, 0)) * 100)).toFixed(1);
+  const totalExposure = COUNTERPARTIES.reduce((sum, cp) => sum + cp.exposure, 0);
+  const concentrationRisk = +(totalExposure > 0 ? ((COUNTERPARTIES.slice(0, 3).reduce((sum, cp) => sum + cp.exposure, 0) / totalExposure) * 100) : 0).toFixed(1);
 
   // ALM chart data with colors
   const almChartData: AlmChartDataPoint[] = almData.map((b) => ({

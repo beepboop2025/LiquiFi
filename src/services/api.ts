@@ -23,6 +23,14 @@ import type {
   CrrHistoryPoint,
 } from '../types';
 
+const FETCH_TIMEOUT_MS = 15_000;
+
+function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 // Electron uses direct URLs since there's no Vite proxy
 declare global {
   interface Window {
@@ -170,7 +178,7 @@ export function isBackendConnected(): boolean {
  */
 export async function fetchForecast(): Promise<ForecastPoint[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/forecast`);
+    const res = await fetchWithTimeout(`${API_BASE}/forecast`);
     if (!res.ok) {
       console.warn(`[API] Forecast fetch failed: ${res.status} ${res.statusText}`);
       return null;
@@ -188,7 +196,7 @@ export async function fetchForecast(): Promise<ForecastPoint[] | null> {
  */
 export async function fetchMonteCarlo(): Promise<MonteCarloResponse | null> {
   try {
-    const res = await fetch(`${API_BASE}/monte-carlo`);
+    const res = await fetchWithTimeout(`${API_BASE}/monte-carlo`);
     if (!res.ok) {
       console.warn(`[API] Monte Carlo fetch failed: ${res.status} ${res.statusText}`);
       return null;
@@ -205,7 +213,7 @@ export async function fetchMonteCarlo(): Promise<MonteCarloResponse | null> {
  */
 export async function fetchCashFlowHistory(): Promise<CashFlowPoint[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/cashflow-history`);
+    const res = await fetchWithTimeout(`${API_BASE}/cashflow-history`);
     if (!res.ok) {
       console.warn(`[API] Cash flow history fetch failed: ${res.status} ${res.statusText}`);
       return null;
@@ -223,7 +231,7 @@ export async function fetchCashFlowHistory(): Promise<CashFlowPoint[] | null> {
  */
 export async function fetchDataQuality(): Promise<DataQualityResponse | null> {
   try {
-    const res = await fetch(`${API_BASE}/data-quality`);
+    const res = await fetchWithTimeout(`${API_BASE}/data-quality`);
     if (!res.ok) return null;
     return (await res.json()) as DataQualityResponse;
   } catch (err: unknown) {
@@ -239,7 +247,7 @@ export async function triggerRetrain(apiKey?: string): Promise<{ status: string;
   try {
     const headers: Record<string, string> = {};
     if (apiKey) headers['X-Api-Key'] = apiKey;
-    const res = await fetch(`${API_BASE}/model/retrain`, { method: 'POST', headers });
+    const res = await fetchWithTimeout(`${API_BASE}/model/retrain`, { method: 'POST', headers });
     if (!res.ok) {
       const data = (await res.json().catch(() => ({}))) as { message?: string };
       console.warn(`[API] Retrain failed: ${res.status}`, data.message);
@@ -257,7 +265,7 @@ export async function triggerRetrain(apiKey?: string): Promise<{ status: string;
  */
 export async function fetchHealth(): Promise<HealthResponse | null> {
   try {
-    const res = await fetch(`${API_BASE}/health`);
+    const res = await fetchWithTimeout(`${API_BASE}/health`);
     if (!res.ok) {
       console.warn(`[API] Health check failed: ${res.status} ${res.statusText}`);
       return null;
@@ -279,7 +287,7 @@ export async function fetchHealth(): Promise<HealthResponse | null> {
  */
 export async function fetchRegulatoryDashboard(): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/dashboard`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/dashboard`);
     if (!res.ok) return null;
     return (await res.json()) as Record<string, unknown>;
   } catch (err: unknown) {
@@ -293,7 +301,7 @@ export async function fetchRegulatoryDashboard(): Promise<Record<string, unknown
  */
 export async function fetchCRRHistory(): Promise<CrrHistoryPoint[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/crr/history`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/crr/history`);
     if (!res.ok) return null;
     const data = (await res.json()) as { history?: CrrHistoryPoint[] };
     return data.history || null;
@@ -308,7 +316,7 @@ export async function fetchCRRHistory(): Promise<CrrHistoryPoint[] | null> {
  */
 export async function fetchSLRHistory(): Promise<CrrHistoryPoint[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/slr/history`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/slr/history`);
     if (!res.ok) return null;
     const data = (await res.json()) as { history?: CrrHistoryPoint[] };
     return data.history || null;
@@ -323,7 +331,7 @@ export async function fetchSLRHistory(): Promise<CrrHistoryPoint[] | null> {
  */
 export async function fetchALMCurrent(): Promise<AlmBucket[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/alm/current`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/alm/current`);
     if (!res.ok) return null;
     const data = (await res.json()) as { buckets?: AlmBucket[] };
     return data.buckets || null;
@@ -338,7 +346,7 @@ export async function fetchALMCurrent(): Promise<AlmBucket[] | null> {
  */
 export async function fetchALMLiquidity(): Promise<LcrNsfr | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/alm/liquidity`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/alm/liquidity`);
     if (!res.ok) return null;
     return (await res.json()) as LcrNsfr;
   } catch (err: unknown) {
@@ -352,7 +360,7 @@ export async function fetchALMLiquidity(): Promise<LcrNsfr | null> {
  */
 export async function fetchBranches(): Promise<Branch[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/branches`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/branches`);
     if (!res.ok) return null;
     const data = (await res.json()) as { branches?: Branch[] };
     return data.branches || null;
@@ -367,7 +375,7 @@ export async function fetchBranches(): Promise<Branch[] | null> {
  */
 export async function fetchBranchDetail(code: string): Promise<unknown[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/branches/${code}`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/branches/${code}`);
     if (!res.ok) return null;
     const data = (await res.json()) as { history?: unknown[] };
     return data.history || null;
@@ -382,7 +390,7 @@ export async function fetchBranchDetail(code: string): Promise<unknown[] | null>
  */
 export async function fetchBranchesSummary(): Promise<Record<string, RegionalSummary> | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/branches/summary`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/branches/summary`);
     if (!res.ok) return null;
     return (await res.json()) as Record<string, RegionalSummary>;
   } catch (err: unknown) {
@@ -396,7 +404,7 @@ export async function fetchBranchesSummary(): Promise<Record<string, RegionalSum
  */
 export async function generateReport(reportType: string): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/reports/generate`, {
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/reports/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ report_type: reportType }),
@@ -417,7 +425,7 @@ export async function generateReport(reportType: string): Promise<Record<string,
  */
 export async function fetchReports(): Promise<Record<string, unknown>[] | null> {
   try {
-    const res = await fetch(`${API_BASE}/regulatory/reports`);
+    const res = await fetchWithTimeout(`${API_BASE}/regulatory/reports`);
     if (!res.ok) return null;
     const data = (await res.json()) as { reports?: Record<string, unknown>[] };
     return data.reports || null;

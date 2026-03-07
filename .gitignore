@@ -11,6 +11,8 @@ __pycache__/
 *.pyc
 *.pyo
 backend/venv/
+backend/venv_old/
+backend/venv_*/
 
 # Environment / secrets
 .env
@@ -60,6 +62,13 @@ dist-electron/
 release/
 build-backend/
 *.dmg
+*.blockmap
+
+# Legacy monolithic JSX
+liquifi-ultimate.jsx
+
+# Screenshots (referenced from README, keep in screenshots/ dir)
+dashboard-screenshot.png
 
 # Generated icon PNGs
 public/icon-192x192.png
