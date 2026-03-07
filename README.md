@@ -82,11 +82,11 @@ pip install -r requirements.txt
 docker compose -f docker-compose.dev.yml up -d postgres
 
 # Run database migrations
-DATABASE_URL=postgresql://liquifi_dev:devpassword@localhost:5433/liquifi_dev \
+DATABASE_URL=postgresql://liquifi_dev:${POSTGRES_PASSWORD}@localhost:5433/liquifi_dev \
   alembic upgrade head
 
 # Start the server
-DATABASE_URL=postgresql://liquifi_dev:devpassword@localhost:5433/liquifi_dev \
+DATABASE_URL=postgresql://liquifi_dev:${POSTGRES_PASSWORD}@localhost:5433/liquifi_dev \
   python main.py
 ```
 
