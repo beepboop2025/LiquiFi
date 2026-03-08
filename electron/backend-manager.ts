@@ -1,34 +1,32 @@
-const { spawn } = require('child_process');
-const http = require('http');
-const path = require('path');
-const { app } = require('electron');
+import { spawn, ChildProcess } from 'child_process';
+import http from 'http';
+import path from 'path';
+import { app } from 'electron';
 
 const HEALTH_URL = 'http://127.0.0.1:8000/api/health';
 const MAX_POLL_ATTEMPTS = 60;
-const POLL_INTERVAL_MS = 1000;
+const POLL_INTERVAL_MS = 1_000;
 const MAX_RESTARTS = 3;
-const RESTART_DELAY_MS = 2000;
-const SIGKILL_TIMEOUT_MS = 5000;
+const RESTART_DELAY_MS = 2_000;
+const SIGKILL_TIMEOUT_MS = 5_000;
 
-class BackendManager {
-  constructor() {
-    this._proc = null;
-    this._restarts = 0;
-    this._stopping = false;
-    this.onProgress = null; // (message: string) => void
-  }
+export class BackendManager {
+  private _proc: ChildProcess | null = null;
+  private _restarts = 0;
+  private _stopping = false;
+  onProgress: ((message: string) => void) | null = null;
 
   /**
    * Start the Python backend and wait for it to become healthy.
    * Resolves when /api/health responds 200, rejects on timeout.
    */
-  async start() {
+  async start(): Promise<void> {
     this._stopping = false;
     this._spawn();
     await this._pollHealth();
   }
 
-  _spawn() {
+  private _spawn(): void {
     const backendDir = app.isPackaged
       ? path.join(process.resourcesPath, 'backend')
       : path.join(__dirname, '..', 'backend');
@@ -51,17 +49,17 @@ class BackendManager {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    this._proc.stdout.on('data', (data) => {
+    this._proc.stdout!.on('data', (data: Buffer) => {
       const line = data.toString().trim();
       if (line) console.log(`[backend] ${line}`);
     });
 
-    this._proc.stderr.on('data', (data) => {
+    this._proc.stderr!.on('data', (data: Buffer) => {
       const line = data.toString().trim();
       if (line) console.error(`[backend] ${line}`);
     });
 
-    this._proc.on('exit', (code, signal) => {
+    this._proc.on('exit', (code: number | null, signal: string | null) => {
       console.log(`[backend] Process exited: code=${code}, signal=${signal}`);
       this._proc = null;
 
@@ -76,11 +74,11 @@ class BackendManager {
   /**
    * Poll /api/health until it responds 200.
    */
-  _pollHealth() {
+  private _pollHealth(): Promise<void> {
     return new Promise((resolve, reject) => {
       let attempts = 0;
 
-      const poll = () => {
+      const poll = (): void => {
         attempts += 1;
         this._emit(`Connecting to backend (${attempts}/${MAX_POLL_ATTEMPTS})...`);
 
@@ -99,7 +97,7 @@ class BackendManager {
           });
       };
 
-      const retry = () => {
+      const retry = (): void => {
         if (attempts >= MAX_POLL_ATTEMPTS) {
           reject(new Error('Backend did not become healthy within timeout'));
         } else {
@@ -114,7 +112,7 @@ class BackendManager {
   /**
    * Gracefully stop the backend process.
    */
-  stop() {
+  stop(): void {
     if (this._stopping) return;
     this._stopping = true;
     if (!this._proc) return;
@@ -130,15 +128,13 @@ class BackendManager {
           console.log('[backend] Sending SIGKILL...');
           proc.kill('SIGKILL');
         }
-      } catch (err) {
+      } catch {
         // Process already gone
       }
     }, SIGKILL_TIMEOUT_MS);
   }
 
-  _emit(msg) {
+  private _emit(msg: string): void {
     if (this.onProgress) this.onProgress(msg);
   }
 }
-
-module.exports = BackendManager;

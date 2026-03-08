@@ -58,6 +58,8 @@ htmlcov/
 
 # Electron / desktop build
 electron/icon.icns
+electron/*.js
+electron/*.js.map
 dist-electron/
 release/
 build-backend/

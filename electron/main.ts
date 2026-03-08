@@ -1,15 +1,15 @@
-const { app, BrowserWindow, shell } = require('electron');
-const path = require('path');
-const BackendManager = require('./backend-manager.cjs');
-const { buildMenu } = require('./menu.cjs');
+import { app, BrowserWindow, shell } from 'electron';
+import path from 'path';
+import { BackendManager } from './backend-manager';
+import { buildMenu } from './menu';
 
 const IS_DEV = !app.isPackaged;
 const backend = new BackendManager();
 
-let splashWin = null;
-let mainWin = null;
+let splashWin: BrowserWindow | null = null;
+let mainWin: BrowserWindow | null = null;
 
-function createSplashWindow() {
+function createSplashWindow(): void {
   splashWin = new BrowserWindow({
     width: 480,
     height: 360,
@@ -23,7 +23,7 @@ function createSplashWindow() {
   splashWin.center();
 }
 
-function createMainWindow() {
+function createMainWindow(): void {
   mainWin = new BrowserWindow({
     width: 1600,
     height: 1000,
@@ -32,7 +32,7 @@ function createMainWindow() {
     backgroundColor: '#050810',
     icon: path.join(__dirname, 'icon.icns'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
@@ -55,7 +55,7 @@ function createMainWindow() {
   });
 }
 
-function updateSplashStatus(text) {
+function updateSplashStatus(text: string): void {
   if (splashWin && !splashWin.isDestroyed()) {
     const escaped = text.replace(/'/g, "\\'");
     splashWin.webContents
@@ -76,14 +76,15 @@ app.whenReady().then(async () => {
     await backend.start();
     updateSplashStatus('Loading dashboard...');
   } catch (err) {
-    updateSplashStatus(`Backend error: ${err.message}`);
+    const message = err instanceof Error ? err.message : String(err);
+    updateSplashStatus(`Backend error: ${message}`);
     // Still try to open main window — user can retry manually
   }
 
   createMainWindow();
 
-  mainWin.once('ready-to-show', () => {
-    mainWin.show();
+  mainWin!.once('ready-to-show', () => {
+    mainWin!.show();
     if (splashWin && !splashWin.isDestroyed()) {
       splashWin.close();
       splashWin = null;
@@ -103,6 +104,6 @@ app.on('before-quit', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createMainWindow();
-    mainWin.show();
+    mainWin!.show();
   }
 });

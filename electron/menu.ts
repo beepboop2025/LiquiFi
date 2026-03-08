@@ -1,7 +1,7 @@
-const { app, Menu } = require('electron');
+import { app, Menu, MenuItemConstructorOptions } from 'electron';
 
-function buildMenu() {
-  const template = [
+export function buildMenu(): void {
+  const template: MenuItemConstructorOptions[] = [
     {
       label: app.name,
       submenu: [
@@ -55,5 +55,3 @@ function buildMenu() {
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
-
-module.exports = { buildMenu };

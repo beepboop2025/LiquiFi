@@ -3,15 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "electron:dev": "electron .",
-    "electron:start": "BUILD_TARGET=electron vite build && electron .",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "electron:dev": "npm run build:electron && electron .",
+    "electron:start": "npm run build:electron && BUILD_TARGET=electron vite build && electron .",
     "electron:prebuild": "rsync -a --exclude='venv' --exclude='__pycache__' --exclude='*.pyc' --exclude='logs' --exclude='metrics' --exclude='data/collected' --exclude='data/_cache' --exclude='tests' backend/ build-backend/",
-    "electron:build": "BUILD_TARGET=electron vite build && npm run electron:prebuild && electron-builder --mac"
+    "electron:build": "npm run build:electron && BUILD_TARGET=electron vite build && npm run electron:prebuild && electron-builder --mac"
   },
   "dependencies": {
     "@babel/core": "^7.28.6",
@@ -29,6 +30,7 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "@types/node": "^25.3.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.3",
@@ -50,7 +52,9 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!electron/*.ts",
+      "!electron/*.js.map"
     ],
     "extraResources": [
       {

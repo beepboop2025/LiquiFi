@@ -1,0 +1,7 @@
+# Override GitHub Linguist language detection
+# Service worker must remain .js (browsers require it)
+public/sw.js  linguist-vendored
+
+# Compiled Electron output (source is .ts)
+electron/*.js  linguist-generated
+electron/*.js.map  linguist-generated
