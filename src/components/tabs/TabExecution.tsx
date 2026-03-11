@@ -53,14 +53,14 @@ interface TabExecutionProps {
   onExecuteDeployment: (payload: { plan: SuggestedAllocation[]; surplus: number }) => Promise<DeploymentResult>;
   onExportOrderBook: () => void;
   onRefreshTelemetry: () => void;
+  surplus?: number;
 }
 
-export default function TabExecution({ rates, backend, onExecuteDeployment, onExportOrderBook, onRefreshTelemetry }: TabExecutionProps) {
+export default function TabExecution({ rates, backend, onExecuteDeployment, onExportOrderBook, onRefreshTelemetry, surplus = 50 }: TabExecutionProps) {
   const [deploying, setDeploying] = useState<boolean>(false);
   const [deployed, setDeployed] = useState<boolean>(false);
   const [splitView, setSplitView] = useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
-  const surplus = 50;
 
   const suggestedAlloc = useMemo<SuggestedAllocation[]>(() => ([
     { instrument: "CBLO", amount: 20, rate: rates.cblo_bid, platform: "CCIL", reason: "Highest risk-adjusted score, T+0, G-Sec collateral", splits: [{ cp: "SBI", amt: 10 }, { cp: "ICICI", amt: 10 }] },
@@ -91,24 +91,58 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
     setDeploying(true);
     setDeployed(false);
     setMessage("");
-    const result = await onExecuteDeployment({ plan: suggestedAlloc, surplus });
-    setDeploying(false);
-    setDeployed(result.ok);
-    setMessage(result.message);
-  }, [deploying, onExecuteDeployment, suggestedAlloc]);
+    try {
+      const result = await onExecuteDeployment({ plan: suggestedAlloc, surplus });
+      setDeployed(result.ok);
+      setMessage(result.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown deployment error";
+      console.error("[TabExecution] Deploy failed:", err);
+      setDeployed(false);
+      setMessage(`Deployment failed: ${msg}`);
+    } finally {
+      setDeploying(false);
+    }
+  }, [deploying, onExecuteDeployment, suggestedAlloc, surplus]);
 
   const canDeploy = !deploying && !backend.circuitOpen && preTradeCheck.errors.length === 0;
 
+  const deployBtnBg = deploying
+    ? "linear-gradient(135deg, var(--amber), var(--amber-dim))"
+    : deployed
+      ? "linear-gradient(135deg, var(--green), var(--green-dim))"
+      : "linear-gradient(135deg, var(--cyan), var(--blue))";
+
+  const deployBtnShadow = deploying
+    ? "0 4px 24px rgba(245, 158, 11, 0.3)"
+    : deployed
+      ? "0 4px 24px rgba(16, 185, 129, 0.3)"
+      : undefined;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div className="card card-glow" style={{ borderColor: deployed ? "rgba(16,185,129,0.3)" : backend.circuitOpen ? "rgba(239,68,68,0.3)" : "var(--border-1)" }}>
+      <div className="card card-glow" style={{
+        borderColor: deployed ? "rgba(16,185,129,0.3)" : backend.circuitOpen ? "rgba(239,68,68,0.3)" : "var(--border-1)",
+        transition: "border-color var(--duration-slow) var(--ease-smooth)",
+      }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <div>
             <h3 style={{ fontSize: 17, fontWeight: 700, display: "flex", alignItems: "center", gap: 10 }}>
-              <Zap size={20} color="var(--cyan)" /> Smart Deployment Engine
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 30,
+                height: 30,
+                borderRadius: 8,
+                background: "rgba(6, 214, 224, 0.1)",
+              }}>
+                <Zap size={18} color="var(--cyan)" />
+              </span>
+              Smart Deployment Engine
             </h3>
             <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
-              Pre-trade risk checks + idempotency + retry/circuit breaker for ₹{surplus}Cr surplus deployment
+              Pre-trade risk checks + idempotency + retry/circuit breaker for {"\u20B9"}{surplus}Cr surplus deployment
             </p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -118,8 +152,31 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
             <button className="btn-ghost" onClick={onRefreshTelemetry}>
               <RefreshCw size={12} /> Refresh Telemetry
             </button>
-            <button className="btn-primary" onClick={handleDeploy} disabled={!canDeploy}>
-              {deploying ? <><RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} /> Executing Orders...</> : <><Play size={16} /> Deploy ₹{surplus}Cr</>}
+            <button
+              className="btn-primary"
+              onClick={handleDeploy}
+              disabled={!canDeploy}
+              style={{
+                background: deployBtnBg,
+                transition: "all 0.5s cubic-bezier(0.22, 1, 0.36, 1)",
+                boxShadow: deployBtnShadow,
+                minWidth: 160,
+                justifyContent: "center",
+              }}
+            >
+              {deploying ? (
+                <>
+                  <RefreshCw size={16} className="spin" /> Executing Orders...
+                </>
+              ) : deployed ? (
+                <>
+                  <CheckCircle size={16} /> Deployed
+                </>
+              ) : (
+                <>
+                  <Play size={16} /> Deploy {"\u20B9"}{surplus}Cr
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -132,12 +189,33 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
         </div>
 
         {message && (
-          <div style={{ background: deployed ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.08)", border: `1px solid ${deployed ? "rgba(16,185,129,0.25)" : "rgba(239,68,68,0.2)"}`, borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 11, color: deployed ? "var(--green)" : "var(--red)" }}>
+          <div className="anim-fade-scale" style={{
+            background: deployed ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.06)",
+            border: `1px solid ${deployed ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.15)"}`,
+            borderRadius: 10,
+            padding: "10px 14px",
+            marginBottom: 12,
+            fontSize: 11,
+            color: deployed ? "var(--green)" : "var(--red)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            boxShadow: deployed ? "var(--shadow-green)" : "var(--shadow-red)",
+          }}>
+            {deployed ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
             {message}
           </div>
         )}
 
-        <div style={{ background: "var(--bg-1)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        {/* Pre-Trade Validation */}
+        <div style={{
+          background: "var(--bg-1)",
+          border: "1px solid var(--border-1)",
+          borderRadius: 8,
+          padding: 12,
+          marginBottom: 12,
+          transition: "border-color var(--duration-normal) var(--ease-smooth)",
+        }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Pre-Trade Validation</span>
             <StatusBadge status={preTradeCheck.valid ? "pass" : "fail"} />
@@ -145,15 +223,15 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div>
               <div style={{ fontSize: 10, color: "var(--green)", marginBottom: 4 }}>Checks Passed</div>
-              <div style={{ fontSize: 11, color: "var(--text-2)" }}>Plan total: ₹{preTradeCheck.total.toFixed(1)}Cr / ₹{surplus}Cr</div>
+              <div style={{ fontSize: 11, color: "var(--text-2)" }}>Plan total: {"\u20B9"}{preTradeCheck.total.toFixed(1)}Cr / {"\u20B9"}{surplus}Cr</div>
               <div style={{ fontSize: 11, color: backend.circuitOpen ? "var(--red)" : "var(--text-2)" }}>Circuit: {backend.circuitOpen ? "Open" : "Closed"}</div>
             </div>
             <div>
               {preTradeCheck.errors.length > 0 && preTradeCheck.errors.map((err, i) => (
-                <div key={`e-${i}`} style={{ fontSize: 10, color: "var(--red)", lineHeight: 1.5 }}>• {err}</div>
+                <div key={`e-${i}`} style={{ fontSize: 10, color: "var(--red)", lineHeight: 1.5 }}>{"\u2022"} {err}</div>
               ))}
               {preTradeCheck.errors.length === 0 && preTradeCheck.warnings.length > 0 && preTradeCheck.warnings.map((warn, i) => (
-                <div key={`w-${i}`} style={{ fontSize: 10, color: "var(--amber)", lineHeight: 1.5 }}>• {warn}</div>
+                <div key={`w-${i}`} style={{ fontSize: 10, color: "var(--amber)", lineHeight: 1.5 }}>{"\u2022"} {warn}</div>
               ))}
               {preTradeCheck.errors.length === 0 && preTradeCheck.warnings.length === 0 && (
                 <div style={{ fontSize: 10, color: "var(--green)" }}>All hard checks passed: limits, split integrity, idempotency gate ready.</div>
@@ -162,23 +240,35 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
           </div>
         </div>
 
+        {/* Allocation Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {suggestedAlloc.map((item, i) => (
-            <div key={i} style={{ background: deployed ? "rgba(6,214,224,0.03)" : "var(--bg-1)", borderRadius: 8, padding: 14, border: `1px solid ${deployed ? "rgba(16,185,129,0.2)" : "var(--border-1)"}` }}>
+            <div
+              key={i}
+              className="anim-in"
+              style={{
+                background: deployed ? "rgba(6,214,224,0.03)" : "var(--bg-1)",
+                borderRadius: 10,
+                padding: 14,
+                border: `1px solid ${deployed ? "rgba(16,185,129,0.2)" : "var(--border-1)"}`,
+                animationDelay: `${i * 80}ms`,
+                transition: "all var(--duration-slow) var(--ease-smooth)",
+              }}
+            >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{item.instrument}</span>
                 <span className="badge mono" style={{ background: "var(--bg-3)", color: "var(--text-2)" }}>{item.platform}</span>
               </div>
-              <div className="mono" style={{ fontSize: 24, fontWeight: 700, color: "var(--cyan)" }}>₹{item.amount}Cr</div>
+              <div className="mono" style={{ fontSize: 24, fontWeight: 700, color: "var(--cyan)" }}>{"\u20B9"}{item.amount}Cr</div>
               <div className="mono" style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>{item.rate.toFixed(2)}%</div>
               <p style={{ fontSize: 10, color: "var(--text-3)", lineHeight: 1.5, marginTop: 6 }}>{item.reason}</p>
               {splitView && (
-                <div style={{ marginTop: 8, borderTop: "1px solid var(--border-1)", paddingTop: 8 }}>
+                <div className="anim-fade" style={{ marginTop: 8, borderTop: "1px solid var(--border-1)", paddingTop: 8 }}>
                   <div style={{ fontSize: 9, color: "var(--text-4)", marginBottom: 4, textTransform: "uppercase" }}>Order Splits</div>
                   {item.splits.map((s, j) => (
                     <div key={j} style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-2)", padding: "2px 0" }}>
                       <span>{s.cp}</span>
-                      <span className="mono">₹{s.amt}Cr</span>
+                      <span className="mono">{"\u20B9"}{s.amt}Cr</span>
                     </div>
                   ))}
                 </div>
@@ -188,6 +278,7 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
         </div>
       </div>
 
+      {/* Order Book */}
       <div className="card">
         <SectionTitle icon={BookOpen} title="Order Book" subtitle="Execution output from backend queue with retry/circuit controls" color="var(--blue)" badge={`${backend.orderBook.length} orders`} right={
           <div style={{ display: "flex", gap: 8 }}>
@@ -196,25 +287,33 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
           </div>
         } />
         <div className="scrollbar-thin" style={{ maxHeight: 340, overflowY: "auto" }}>
-          <div className="table-header" style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1.2fr 0.7fr 1fr 0.8fr 1.2fr 1fr 0.8fr", position: "sticky", top: 0, background: "var(--bg-2)", zIndex: 1 }}>
+          <div className="table-header" style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr 1.2fr 0.7fr 1fr 0.8fr 1.2fr 1fr 0.8fr", position: "sticky", top: 0, background: "var(--glass-bg-solid)", backdropFilter: "blur(12px)", zIndex: 1 }}>
             <span>Order ID</span><span>Time</span><span>Instrument</span><span>Side</span><span>Amount</span><span>Rate</span><span>Counterparty</span><span>Platform</span><span>Status</span>
           </div>
-          {backend.orderBook.map((ord) => (
-            <div key={ord.id} className="table-row" style={{ gridTemplateColumns: "1fr 0.8fr 1.2fr 0.7fr 1fr 0.8fr 1.2fr 1fr 0.8fr" }}>
+          {backend.orderBook.map((ord, idx) => (
+            <div
+              key={ord.id}
+              className="table-row anim-row"
+              style={{
+                gridTemplateColumns: "1fr 0.8fr 1.2fr 0.7fr 1fr 0.8fr 1.2fr 1fr 0.8fr",
+                animationDelay: `${Math.min(idx * 30, 300)}ms`,
+              }}
+            >
               <span className="mono" style={{ color: "var(--text-3)", fontSize: 10 }}>{ord.id}</span>
               <span className="mono" style={{ color: "var(--text-4)", fontSize: 10 }}>{ord.time}</span>
               <span style={{ fontWeight: 500 }}>{ord.instrument}</span>
               <span className="mono" style={{ color: ord.side === "LEND" ? "var(--green)" : "var(--red)", fontWeight: 600, fontSize: 10 }}>{ord.side}</span>
-              <span className="mono" style={{ fontWeight: 600 }}>₹{ord.amount}Cr</span>
+              <span className="mono" style={{ fontWeight: 600 }}>{"\u20B9"}{ord.amount}Cr</span>
               <span className="mono" style={{ color: "var(--green)" }}>{ord.rate.toFixed(2)}%</span>
               <span style={{ color: "var(--text-2)", fontSize: 11 }}>{ord.counterparty}</span>
-              <span className="badge mono" style={{ background: "var(--bg-1)", color: "var(--text-3)", justifySelf: "start" }}>{ord.platform}</span>
-              <StatusBadge status={ord.status} />
+              <span className="badge mono" style={{ background: "rgba(15,23,42,0.5)", color: "var(--text-3)", justifySelf: "start" }}>{ord.platform}</span>
+              <StatusBadge status={ord.status} pulse={ord.status === "queued" || ord.status === "retry"} />
             </div>
           ))}
         </div>
       </div>
 
+      {/* Counterparty Directory */}
       <div className="card">
         <SectionTitle icon={Shield} title="Counterparty Directory" subtitle="Projected utilization includes this deployment plan" color="var(--purple)" />
         <div className="table-header" style={{ display: "grid", gridTemplateColumns: "1.4fr 0.8fr 0.6fr 0.9fr 1.3fr 1.1fr 0.8fr 0.9fr 0.6fr" }}>
@@ -231,11 +330,15 @@ export default function TabExecution({ rates, backend, onExecuteDeployment, onEx
               </span>
               <span className="mono" style={{ color: cp.rating === "A1+" ? "var(--green)" : cp.rating === "A1" ? "var(--amber)" : "var(--red)", fontWeight: 600 }}>{cp.rating}</span>
               <span style={{ color: "var(--text-4)", fontSize: 10 }}>{cp.agency}</span>
-              <span className="mono" style={{ fontWeight: 600 }}>₹{cp.exposure}Cr</span>
-              <span className="mono" style={{ color: projected > cp.limit ? "var(--red)" : "var(--cyan)", fontWeight: 600 }}>₹{projected.toFixed(1)}Cr</span>
+              <span className="mono" style={{ fontWeight: 600 }}>{"\u20B9"}{cp.exposure}Cr</span>
+              <span className="mono" style={{ color: projected > cp.limit ? "var(--red)" : "var(--cyan)", fontWeight: 600, transition: "color var(--duration-normal) var(--ease-smooth)" }}>{"\u20B9"}{projected.toFixed(1)}Cr</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div className="progress-bar" style={{ flex: 1 }}>
-                  <div className="progress-fill" style={{ width: `${Math.min(utilization * 100, 100)}%`, background: utilization > 1 ? "var(--red)" : utilization > 0.8 ? "var(--amber)" : "var(--cyan)" }} />
+                  <div className="progress-fill" style={{
+                    width: `${Math.min(utilization * 100, 100)}%`,
+                    background: utilization > 1 ? "var(--red)" : utilization > 0.8 ? "var(--amber)" : "var(--cyan)",
+                    transition: "width 1s var(--ease-spring), background 0.5s var(--ease-smooth)",
+                  }} />
                 </div>
                 <span className="mono" style={{ fontSize: 10, color: utilization > 1 ? "var(--red)" : utilization > 0.8 ? "var(--amber)" : "var(--text-3)", minWidth: 30 }}>{(utilization * 100).toFixed(0)}%</span>
               </div>

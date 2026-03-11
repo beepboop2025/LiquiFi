@@ -6,7 +6,7 @@ import type { RatesSnapshot } from '../types';
  */
 export const generateRates = (prev?: Partial<RatesSnapshot>): RatesSnapshot => {
   const drift = (base: number, prev_val: number | undefined, vol: number): number => {
-    if (!prev_val) return base;
+    if (prev_val === undefined || prev_val === null) return base;
     return +(prev_val + (Math.random() - 0.5) * vol).toFixed(4);
   };
   return {

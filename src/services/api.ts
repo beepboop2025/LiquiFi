@@ -69,6 +69,7 @@ let _onDataQuality: WebSocketCallbacks['onDataQuality'] | null = null;
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_DELAY_MS = 30000;
 let _reconnectAttempt: number = 0;
+let _intentionalClose: boolean = false;
 
 /**
  * Connect WebSocket to backend for live rate streaming.
@@ -119,6 +120,10 @@ function _connect(): void {
   _ws.onclose = (evt: CloseEvent): void => {
     console.info('[WS] Connection closed:', evt.code, evt.reason);
     _setConnected(false);
+    if (_intentionalClose) {
+      _intentionalClose = false;
+      return;
+    }
     _scheduleReconnect();
   };
 
@@ -158,6 +163,7 @@ export function disconnectWebSocket(): void {
     _reconnectTimer = null;
   }
   if (_ws) {
+    _intentionalClose = true;
     try { _ws.close(); } catch (err: unknown) {
       console.debug('[WS] Close error during disconnect:', (err as Error).message);
     }
@@ -388,11 +394,12 @@ export async function fetchBranchDetail(code: string): Promise<unknown[] | null>
 /**
  * Fetch regional aggregation summary.
  */
-export async function fetchBranchesSummary(): Promise<Record<string, RegionalSummary> | null> {
+export async function fetchBranchesSummary(): Promise<{ regions: Record<string, RegionalSummary>; totals: Record<string, unknown> | null } | null> {
   try {
     const res = await fetchWithTimeout(`${API_BASE}/regulatory/branches/summary`);
     if (!res.ok) return null;
-    return (await res.json()) as Record<string, RegionalSummary>;
+    const data = (await res.json()) as { regions?: Record<string, RegionalSummary>; totals?: Record<string, unknown> };
+    return { regions: data.regions || {}, totals: data.totals || null };
   } catch (err: unknown) {
     console.warn('[API] Branches summary error:', (err as Error).message);
     return null;

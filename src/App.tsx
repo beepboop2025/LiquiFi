@@ -93,6 +93,7 @@ export default function App() {
       ...prev,
       killSwitch: snapshot.killSwitch,
       circuitOpen: snapshot.metrics.circuitState === "open",
+      circuitHalfOpen: snapshot.metrics.circuitState === "half_open",
       circuitOpenedAt: snapshot.metrics.circuitOpenedAt,
       queueDepth,
       throughputPerMin: Math.max(40, Math.round((snapshot.metrics.processedOrders + snapshot.metrics.retries + queueDepth) * 4)),
@@ -126,9 +127,12 @@ export default function App() {
     }));
   }, [dataQuality, forecastSource]);
 
+  const syncRef = useRef(syncBackendTelemetry);
+  syncRef.current = syncBackendTelemetry;
+
   useEffect(() => {
     engineRef.current.hydrate();
-    syncBackendTelemetry({ skipPayments: true });
+    syncRef.current({ skipPayments: true });
 
     connectWebSocket({
       onRates: (data) => {
@@ -154,7 +158,7 @@ export default function App() {
         engineRef.current.tick();
       }
       engineRef.current.processQueue();
-      syncBackendTelemetry();
+      syncRef.current();
       setTime(new Date());
     }, 3000);
 
@@ -193,7 +197,7 @@ export default function App() {
       clearInterval(mcInterval);
       disconnectWebSocket();
     };
-  }, [syncBackendTelemetry]);
+  }, []);
 
   const handleExecuteDeployment = useCallback(async ({ plan, surplus }: { plan: DeploymentLeg[]; surplus: number }): Promise<DeploymentResult> => {
     try {
@@ -375,7 +379,11 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-0)", position: "relative" }}>
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(180deg, var(--bg-0) 0%, #080d1a 50%, var(--bg-0) 100%)",
+      position: "relative",
+    }}>
       <div className="grid-overlay" />
 
       <Header backend={backend} time={time} alertCount={alertCount} rateItems={rateItems} backendConnected={backendConnected} />
@@ -383,7 +391,9 @@ export default function App() {
 
       <main style={{ padding: "18px 24px 40px", position: "relative", zIndex: 10 }}>
         <ErrorBoundary label="Tab render failed">
-          {renderTab()}
+          <div key={tab} className="tab-content-enter">
+            {renderTab()}
+          </div>
         </ErrorBoundary>
       </main>
 

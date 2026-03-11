@@ -98,7 +98,7 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
       .filter((row): row is Record<string, unknown> => row != null && typeof row === "object")
       .slice(-ENGINE_LIMITS.maxRateHistory)
       .map((row) => ({
-        ts: toIsoTime(row.ts) as unknown as number,
+        ts: typeof row.ts === 'string' ? Date.parse(row.ts) : row.ts,
         mibor: +toFinite(row.mibor, rates.mibor_overnight).toFixed(4),
         repo: +toFinite(row.repo, rates.repo).toFixed(4),
         spread: +toFinite(row.spread, defaultSpread).toFixed(2),
@@ -509,16 +509,16 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
 
   const getSnapshot = (): EngineState => ({
     ...state,
-    rates: state.rates,
-    rateHistory: state.rateHistory,
-    events: state.events,
-    orderQueue: state.orderQueue,
+    rates: { ...state.rates },
+    rateHistory: [...state.rateHistory],
+    events: [...state.events],
+    orderQueue: [...state.orderQueue],
     killSwitch: state.killSwitch,
-    metrics: state.metrics,
-    processedKeys: state.processedKeys,
-    rateLimiterBucket: state.rateLimiterBucket,
+    metrics: { ...state.metrics },
+    processedKeys: new Set(state.processedKeys),
+    rateLimiterBucket: [...state.rateLimiterBucket],
     schemaVersion: state.schemaVersion,
-    flags: state.flags,
+    flags: { ...state.flags },
   });
 
   return {

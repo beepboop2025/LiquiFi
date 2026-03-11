@@ -66,7 +66,18 @@ export default function TabSettings({ backend, onToggleKillSwitch, onToggleFailo
         <SectionTitle icon={Key} title="Role-Based Access Control" subtitle="2FA enforced for all roles • End-to-end encryption on all data channels" color="var(--amber)" />
         <div>
           {(ACCESS_ROLES as AccessRole[]).map((role, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 2fr 2.5fr 0.8fr 0.6fr", padding: "12px 14px", borderBottom: "1px solid var(--border-1)", alignItems: "center" }}>
+            <div key={i} className="anim-row" style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 2fr 2.5fr 0.8fr 0.6fr",
+              padding: "12px 14px",
+              borderBottom: "1px solid var(--border-1)",
+              alignItems: "center",
+              animationDelay: `${i * 50}ms`,
+              transition: "background var(--duration-fast) var(--ease-smooth)",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "rgba(30,48,80,0.15)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+            >
               <div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>{role.role}</span>
                 <div className="badge mono" style={{ background: "var(--bg-1)", color: "var(--text-3)", marginTop: 4, display: "inline-block" }}>{role.level}</div>
@@ -141,7 +152,25 @@ export default function TabSettings({ backend, onToggleKillSwitch, onToggleFailo
             { layer: "ML Pipeline", tech: "Airflow + MLflow", detail: "Daily retrain, model versioning, A/B" },
             { layer: "Deployment", tech: "AWS Mumbai + K8s", detail: "RBI data residency, auto-scaling" },
           ] as ArchItem[]).map((item, i) => (
-            <div key={i} style={{ background: "var(--bg-1)", borderRadius: 8, padding: 12 }}>
+            <div key={i} className="anim-in" style={{
+              background: "var(--bg-1)",
+              borderRadius: 8,
+              padding: 12,
+              animationDelay: `${i * 40}ms`,
+              transition: "all var(--duration-normal) var(--ease-smooth)",
+              cursor: "default",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
+              (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--shadow-md)";
+              (e.currentTarget as HTMLDivElement).style.background = "var(--bg-3)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLDivElement).style.transform = "";
+              (e.currentTarget as HTMLDivElement).style.boxShadow = "";
+              (e.currentTarget as HTMLDivElement).style.background = "var(--bg-1)";
+            }}
+            >
               <div style={{ fontSize: 10, color: "var(--text-4)", textTransform: "uppercase", marginBottom: 4 }}>{item.layer}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--purple)", marginBottom: 4 }}>{item.tech}</div>
               <div style={{ fontSize: 10, color: "var(--text-3)" }}>{item.detail}</div>
