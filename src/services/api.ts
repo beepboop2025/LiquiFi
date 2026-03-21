@@ -68,6 +68,7 @@ let _onConnectionChange: WebSocketCallbacks['onConnectionChange'] | null = null;
 let _onDataQuality: WebSocketCallbacks['onDataQuality'] | null = null;
 const RECONNECT_DELAY_MS = 3000;
 const MAX_RECONNECT_DELAY_MS = 30000;
+const MAX_RECONNECT_ATTEMPTS = 10;
 let _reconnectAttempt: number = 0;
 let _intentionalClose: boolean = false;
 
@@ -145,12 +146,27 @@ function _setConnected(val: boolean): void {
 
 function _scheduleReconnect(): void {
   if (_reconnectTimer) return;
+  if (_reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    console.warn(`[WS] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Giving up.`);
+    _setConnected(false);
+    return;
+  }
   const delay = Math.min(RECONNECT_DELAY_MS * Math.pow(1.5, _reconnectAttempt), MAX_RECONNECT_DELAY_MS);
   _reconnectAttempt += 1;
-  console.info(`[WS] Reconnecting in ${Math.round(delay)}ms (attempt ${_reconnectAttempt})`);
+  console.info(`[WS] Reconnecting in ${Math.round(delay)}ms (attempt ${_reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS})`);
   _reconnectTimer = setTimeout(() => {
     _reconnectTimer = null;
-    _connect();
+    try {
+      _connect();
+    } catch (err: unknown) {
+      console.warn('[WS] Reconnect _connect() threw:', (err as Error).message);
+      if (_reconnectTimer) {
+        clearTimeout(_reconnectTimer);
+        _reconnectTimer = null;
+      }
+      _setConnected(false);
+      _scheduleReconnect();
+    }
   }, delay);
 }
 
@@ -394,11 +410,11 @@ export async function fetchBranchDetail(code: string): Promise<unknown[] | null>
 /**
  * Fetch regional aggregation summary.
  */
-export async function fetchBranchesSummary(): Promise<{ regions: Record<string, RegionalSummary>; totals: Record<string, unknown> | null } | null> {
+export async function fetchBranchesSummary(): Promise<{ regions: Record<string, RegionalSummary>; totals: { cash: number; deployed: number; deposits: number; advances: number; pnl: number } | null } | null> {
   try {
     const res = await fetchWithTimeout(`${API_BASE}/regulatory/branches/summary`);
     if (!res.ok) return null;
-    const data = (await res.json()) as { regions?: Record<string, RegionalSummary>; totals?: Record<string, unknown> };
+    const data = (await res.json()) as { regions?: Record<string, RegionalSummary>; totals?: { cash: number; deployed: number; deposits: number; advances: number; pnl: number } };
     return { regions: data.regions || {}, totals: data.totals || null };
   } catch (err: unknown) {
     console.warn('[API] Branches summary error:', (err as Error).message);

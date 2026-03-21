@@ -31,6 +31,8 @@ export const createAuditEntry = ({
     timeZone: "Asia/Kolkata",
     hour12: false,
   });
+  // Hash based on CONTENT ONLY (action + detail + actor + time) — not the random id
+  // This makes the hash deterministic and tamper-evident for the same content
   return {
     id,
     time,
@@ -38,6 +40,6 @@ export const createAuditEntry = ({
     detail,
     user: actor,
     level,
-    hash: shortHash(`${id}|${time}|${action}|${detail}|${actor}`),
+    hash: shortHash(`${action}|${detail}|${actor}|${time}`),
   };
 };

@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 // Rates & Market Data
 // ---------------------------------------------------------------------------
 export interface RatesSnapshot {
+  [key: string]: number;
   mibor_overnight: number;
   mibor_14d: number;
   mibor_1m: number;

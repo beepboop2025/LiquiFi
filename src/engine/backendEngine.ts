@@ -1,5 +1,6 @@
 import { ENGINE_STORAGE_KEY, ENGINE_SCHEMA_VERSION, ENGINE_LIMITS } from '../constants/engine';
 import { EXEC_INSTRUMENTS, EXEC_SIDES } from '../constants/instruments';
+import { RATE_FIELDS } from '../constants/rates';
 import { generateRates } from '../generators/rates';
 import { validateRates } from './validation';
 import { storageRead, storageWrite } from '../utils/storage';
@@ -10,6 +11,7 @@ import type {
   EngineState,
   EngineMetrics,
   RatesSnapshot,
+  RateField,
   RateHistoryEntry,
   BackendEvent,
   Order,
@@ -19,6 +21,31 @@ import type {
   EventLevel,
   SubmitOrderResult,
 } from '../types';
+
+const RATE_LIMITER_STORAGE_KEY = 'liquifi.rateLimiter.v1';
+
+// ---------------------------------------------------------------------------
+// Type guard for RatesSnapshot — validates at API/persistence boundaries
+// ---------------------------------------------------------------------------
+
+function isRatesSnapshot(val: unknown): val is RatesSnapshot {
+  if (!val || typeof val !== 'object') return false;
+  const rec = val as Record<string, unknown>;
+  return RATE_FIELDS.every(
+    (field: RateField) => typeof rec[field] === 'number' && Number.isFinite(rec[field] as number)
+  );
+}
+
+/**
+ * Coerce a validated rates record to RatesSnapshot.
+ * Uses the type guard when possible; falls back to assertion for
+ * records we know came from validateRates() (which guarantees all fields).
+ */
+function toRatesSnapshot(rates: Record<string, number>): RatesSnapshot {
+  if (isRatesSnapshot(rates)) return rates;
+  // validateRates guarantees all RATE_FIELDS exist, so this is safe
+  return rates as unknown as RatesSnapshot;
+}
 
 // ---------------------------------------------------------------------------
 // Internal types for persisted state shape
@@ -43,7 +70,7 @@ interface PersistedState {
 export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()): Engine => {
   let state: EngineState = {
     schemaVersion: ENGINE_SCHEMA_VERSION,
-    rates: validateRates(seedRates, seedRates).rates as unknown as RatesSnapshot,
+    rates: toRatesSnapshot(validateRates(seedRates, seedRates).rates),
     rateHistory: [],
     events: [],
     orderQueue: [],
@@ -92,13 +119,13 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
 
   const sanitizeRateHistory = (rows: unknown[]): RateHistoryEntry[] => {
     if (!Array.isArray(rows)) return [];
-    const rates = state.rates as unknown as Record<string, number>;
+    const rates = state.rates;
     const defaultSpread = (rates.mibor_overnight - rates.repo) * 100;
     return rows
       .filter((row): row is Record<string, unknown> => row != null && typeof row === "object")
       .slice(-ENGINE_LIMITS.maxRateHistory)
       .map((row) => ({
-        ts: typeof row.ts === 'string' ? Date.parse(row.ts) : row.ts,
+        ts: typeof row.ts === 'string' ? Date.parse(row.ts) : toFinite(row.ts, Date.now()),
         mibor: +toFinite(row.mibor, rates.mibor_overnight).toFixed(4),
         repo: +toFinite(row.repo, rates.repo).toFixed(4),
         spread: +toFinite(row.spread, defaultSpread).toFixed(2),
@@ -140,7 +167,7 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
         ? (o.side as string)
         : EXEC_SIDES[0],
       amount: +Math.max(0.01, toFinite(o.amount, 0.01)).toFixed(2),
-      rate: +Math.max(0.0001, toFinite(o.rate, (state.rates as unknown as Record<string, number>).repo)).toFixed(4),
+      rate: +Math.max(0.0001, toFinite(o.rate, (state.rates).repo)).toFixed(4),
       counterparty: toSafeString(o.counterparty, "Liquidity Pool", 80),
       platform: toSafeString(o.platform, "Engine", 40),
       status,
@@ -226,6 +253,9 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
   };
 
   const hydrate = (): void => {
+    // Restore rate limiter timestamps from localStorage so reloads don't bypass limits
+    loadRateLimiterBucket();
+
     const persisted = storageRead<PersistedState>(ENGINE_STORAGE_KEY, null);
     if (!persisted || persisted.schemaVersion !== ENGINE_SCHEMA_VERSION) {
       pushEvent(createBackendEvent("info", "Backend", "Fresh engine boot (no persisted state)."));
@@ -233,8 +263,8 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
       return;
     }
 
-    const validated = validateRates(persisted.rates as unknown as Partial<RatesSnapshot>, state.rates as unknown as RatesSnapshot);
-    state.rates = validated.rates as unknown as RatesSnapshot;
+    const validated = validateRates(persisted.rates as Partial<RatesSnapshot>, state.rates);
+    state.rates = toRatesSnapshot(validated.rates);
     state.rateHistory = sanitizeRateHistory(persisted.rateHistory);
     state.events = sanitizeEvents(persisted.events);
     state.orderQueue = (Array.isArray(persisted.orderQueue) ? persisted.orderQueue : [])
@@ -262,6 +292,21 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
     persist();
   };
 
+  const loadRateLimiterBucket = (): void => {
+    const saved = storageRead<number[]>(RATE_LIMITER_STORAGE_KEY, null);
+    if (Array.isArray(saved)) {
+      const now = Date.now();
+      // Clean up expired timestamps (older than 60s) on load
+      state.rateLimiterBucket = saved.filter(
+        (ts) => typeof ts === "number" && Number.isFinite(ts) && now - ts < 60_000
+      );
+    }
+  };
+
+  const saveRateLimiterBucket = (): void => {
+    storageWrite(RATE_LIMITER_STORAGE_KEY, state.rateLimiterBucket);
+  };
+
   const pruneRateLimitBucket = (now: number): void => {
     state.rateLimiterBucket = state.rateLimiterBucket.filter((ts) => now - ts < 60_000);
   };
@@ -273,6 +318,7 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
       return false;
     }
     state.rateLimiterBucket.push(now);
+    saveRateLimiterBucket();
     return true;
   };
 
@@ -428,9 +474,9 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
   };
 
   const tick = (externalRates?: Partial<RatesSnapshot>): RatesSnapshot => {
-    const generated = externalRates || generateRates(state.rates as unknown as Partial<RatesSnapshot>);
-    const validated = validateRates(generated as Partial<RatesSnapshot>, state.rates as unknown as RatesSnapshot);
-    state.rates = validated.rates as unknown as RatesSnapshot;
+    const generated = externalRates || generateRates(state.rates as Partial<RatesSnapshot>);
+    const validated = validateRates(generated as Partial<RatesSnapshot>, state.rates);
+    state.rates = toRatesSnapshot(validated.rates);
     state.metrics.ticks += 1;
 
     if (validated.corrected) {
@@ -438,7 +484,7 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
       pushEvent(createBackendEvent("warn", "Validation", "Incoming rate snapshot corrected by guardrails."));
     }
 
-    const rates = state.rates as unknown as Record<string, number>;
+    const rates = state.rates;
     const spread = +((rates.mibor_overnight - rates.repo) * 100).toFixed(2);
     if (spread > 35 && !state.flags.spreadAlert) {
       state.flags.spreadAlert = true;
@@ -474,7 +520,7 @@ export const createBackendEngine = (seedRates: RatesSnapshot = generateRates()):
   };
 
   const runChaosBurst = (): void => {
-    const rates = state.rates as unknown as Record<string, number>;
+    const rates = state.rates;
     const samples: (OrderInput & { idempotencyKey: string })[] = [
       { instrument: "CBLO", side: "LEND", amount: 18, rate: rates.cblo_bid, counterparty: "Liquidity Pool", platform: "Engine", idempotencyKey: backendId("drill") },
       { instrument: "Call Money", side: "LEND", amount: 25, rate: rates.mibor_overnight, counterparty: "Liquidity Pool", platform: "Engine", idempotencyKey: backendId("drill") },

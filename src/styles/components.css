@@ -401,3 +401,102 @@
 .toast.error { border-left: 3px solid var(--red); }
 .toast.warning { border-left: 3px solid var(--amber); }
 .toast.info { border-left: 3px solid var(--cyan); }
+
+
+/* =============================================
+   Smooth Panel / Tab Transitions
+   ============================================= */
+.panel-transition {
+  transition:
+    opacity var(--duration-normal) var(--ease-smooth),
+    transform var(--duration-normal) var(--ease-smooth);
+}
+
+.panel-transition:hover {
+  transform: translateY(-1px);
+}
+
+
+/* =============================================
+   Interactive Element Hover Effects
+   ============================================= */
+.interactive-hover {
+  transition:
+    background var(--duration-fast) var(--ease-smooth),
+    color var(--duration-fast) var(--ease-smooth),
+    border-color var(--duration-fast) var(--ease-smooth),
+    box-shadow var(--duration-normal) var(--ease-smooth),
+    transform var(--duration-fast) var(--ease-smooth);
+  cursor: pointer;
+}
+
+.interactive-hover:hover {
+  background: rgba(30, 48, 80, 0.25);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.interactive-hover:active {
+  transform: translateY(0) scale(0.99);
+}
+
+
+/* =============================================
+   Loading Skeleton Pulse Animation
+   ============================================= */
+.skeleton-pulse {
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.6) 0%,
+    rgba(30, 48, 80, 0.5) 40%,
+    rgba(15, 23, 42, 0.6) 80%
+  );
+  background-size: 300% 100%;
+  animation: skeleton-wave 1.8s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-wave {
+  0% { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+
+/* =============================================
+   Reduced Motion — respect user preferences
+   ============================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .tab-content-enter {
+    animation: none;
+  }
+
+  .rate-ticker-inner {
+    animation: none;
+  }
+
+  .card:hover,
+  .stat-box:hover,
+  .rate-card:hover,
+  .btn-primary:hover:not(:disabled),
+  .btn-ghost:hover:not(:disabled),
+  .tab-btn:hover:not(.active),
+  .panel-transition:hover,
+  .interactive-hover:hover {
+    transform: none;
+  }
+
+  .skeleton,
+  .skeleton-pulse {
+    animation: none;
+    background: rgba(15, 23, 42, 0.6);
+  }
+}

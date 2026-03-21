@@ -13,11 +13,36 @@ import type {
 
 // Per-field validation bounds for realistic rate ranges
 const RATE_BOUNDS: Record<string, [number, number]> = {
+  // FX rates
   usdinr_spot: [60, 120],
   usdinr_1m_fwd: [60, 125],
+  // Foreign benchmark
   sofr: [0, 15],
+  // MIBOR tenors
+  mibor_overnight: [3, 12],
+  mibor_14d: [3, 12],
+  mibor_1m: [3, 12],
+  mibor_3m: [3, 12],
+  // Repo / Reverse repo
+  repo: [3, 10],
+  reverse_repo: [3, 10],
+  // CBLO
+  cblo_bid: [2, 10],
+  cblo_ask: [2, 10],
+  // T-Bills
+  tbill_91d: [2, 12],
+  tbill_182d: [2, 12],
+  tbill_364d: [2, 12],
+  // CD rates
+  cd_1m: [3, 15],
+  cd_3m: [3, 15],
+  cd_6m: [3, 15],
+  cd_12m: [3, 15],
+  // CP rates
+  cp_1m: [3, 15],
+  cp_3m: [3, 15],
 };
-const DEFAULT_RATE_BOUNDS: [number, number] = [0, 30]; // Interest rates should not exceed 30%
+const DEFAULT_RATE_BOUNDS: [number, number] = [0, 30]; // Fallback for unlisted fields
 
 /**
  * Validate and sanitize a rates snapshot, clamping values and fixing inversions.
@@ -29,7 +54,7 @@ export const validateRates = (
   const next: Record<string, number> = { ...fallback };
   let corrected = false;
 
-  RATE_FIELDS.forEach((field: string) => {
+  RATE_FIELDS.forEach((field) => {
     const value = (candidate as Record<string, unknown> | null)?.[field];
     const [lo, hi] = RATE_BOUNDS[field] || DEFAULT_RATE_BOUNDS;
     if (typeof value === "number" && Number.isFinite(value)) {
