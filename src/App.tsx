@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { AppBackendState, RatesSnapshot, ForecastPoint, HistoricalRatePoint, CashFlowPoint, MonteCarloData, DataQuality, ForecastSource, DeploymentLeg } from "./types";
 import { TABS } from "./constants/tabs";
@@ -12,25 +12,29 @@ import { createBackendState, createRealtimePayment } from "./engine/backendState
 import { createAuditEntry } from "./utils/audit";
 import { sleep } from "./utils/helpers";
 import { clamp, rand } from "./utils/math";
-import { exportJsonFile } from "./utils/export";
+import { exportJsonFile, exportAllReport } from "./utils/export";
 import { connectWebSocket, disconnectWebSocket, fetchForecast, fetchMonteCarlo, fetchCashFlowHistory } from "./services/api";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { getPerfReport } from "./utils/perfMonitor";
 
 import Header from "./components/layout/Header";
 import TabNav from "./components/layout/TabNav";
 import Footer from "./components/layout/Footer";
 
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
+import { TabSkeleton } from "./components/shared/LoadingSkeleton";
 
-import TabCommandCenter from "./components/tabs/TabCommandCenter";
-import TabAIEngine from "./components/tabs/TabAIEngine";
-import TabOptimizer from "./components/tabs/TabOptimizer";
-import TabExecution from "./components/tabs/TabExecution";
-import TabRisk from "./components/tabs/TabRisk";
-import TabInstruments from "./components/tabs/TabInstruments";
-import TabAnalytics from "./components/tabs/TabAnalytics";
-import TabRegulatory from "./components/tabs/TabRegulatory";
-import TabBranches from "./components/tabs/TabBranches";
-import TabSettings from "./components/tabs/TabSettings";
+// Lazy-loaded tab components — only loaded when selected
+const TabCommandCenter = lazy(() => import("./components/tabs/TabCommandCenter"));
+const TabAIEngine = lazy(() => import("./components/tabs/TabAIEngine"));
+const TabOptimizer = lazy(() => import("./components/tabs/TabOptimizer"));
+const TabExecution = lazy(() => import("./components/tabs/TabExecution"));
+const TabRisk = lazy(() => import("./components/tabs/TabRisk"));
+const TabInstruments = lazy(() => import("./components/tabs/TabInstruments"));
+const TabAnalytics = lazy(() => import("./components/tabs/TabAnalytics"));
+const TabRegulatory = lazy(() => import("./components/tabs/TabRegulatory"));
+const TabBranches = lazy(() => import("./components/tabs/TabBranches"));
+const TabSettings = lazy(() => import("./components/tabs/TabSettings"));
 
 import type { RateTickerItem } from "./components/layout/RateTicker";
 
@@ -264,6 +268,15 @@ export default function App() {
     exportJsonFile(`liquifi-order-book-${safeTs}.json`, backend.orderBook);
   }, [backend.orderBook]);
 
+  const handleExportAll = useCallback(() => {
+    exportAllReport({
+      rates,
+      orderBook: backend.orderBook,
+      auditTrail: backend.auditTrail,
+      perfMetrics: getPerfReport(),
+    });
+  }, [rates, backend.orderBook, backend.auditTrail]);
+
   const handleRefreshTelemetry = useCallback(() => {
     engineRef.current.tick();
     engineRef.current.processQueue();
@@ -332,6 +345,16 @@ export default function App() {
   }, [rates]);
   useLayoutEffect(() => { prevRatesRef.current = rates; }, [rates]);
 
+  // Keyboard shortcuts: Ctrl+1..9 for tabs, Ctrl+E for kill switch
+  const tabIds = useMemo(() => TABS.map((t) => t.id), []);
+  useKeyboardShortcuts({
+    tabIds,
+    setTab,
+    onToggleKillSwitch: handleToggleKillSwitch,
+    onEscape: undefined,
+    onCommandPalette: undefined,
+  });
+
   const renderTab = () => {
     if (tab === "command") {
       return <TabCommandCenter rates={rates} clockData={clockData} historicalRates={historicalRates} cashFlowHistory={cashFlowHistory} paymentStreams={backend.paymentStreams} />;
@@ -391,13 +414,15 @@ export default function App() {
 
       <main style={{ padding: "18px 24px 40px", position: "relative", zIndex: 10 }}>
         <ErrorBoundary label="Tab render failed">
-          <div key={tab} className="tab-content-enter">
-            {renderTab()}
-          </div>
+          <Suspense fallback={<TabSkeleton />}>
+            <div key={tab} className="tab-content-enter">
+              {renderTab()}
+            </div>
+          </Suspense>
         </ErrorBoundary>
       </main>
 
-      <Footer backend={backend} />
+      <Footer backend={backend} backendConnected={backendConnected} rates={rates} onExportAll={handleExportAll} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type { MonteCarloPoint } from '../types';
 
 /**
  * Generate Monte Carlo simulation paths for Liquidity at Risk analysis.
+ * (Synchronous — used as fallback when worker is unavailable)
  */
 export const generateMonteCarloSims = (): MonteCarloPoint[][] => {
   const paths: MonteCarloPoint[][] = [];
@@ -19,3 +20,47 @@ export const generateMonteCarloSims = (): MonteCarloPoint[][] => {
   }
   return paths;
 };
+
+/**
+ * Run Monte Carlo simulation off the main thread via a Web Worker.
+ * Falls back to synchronous generation if workers are unavailable.
+ */
+export function generateMonteCarloAsync(
+  paths = MONTE_CARLO_PATHS,
+  steps = 24,
+  startVal = 245,
+): Promise<MonteCarloPoint[][]> {
+  return new Promise((resolve) => {
+    try {
+      const worker = new Worker(
+        new URL('../workers/monteCarloWorker.ts', import.meta.url),
+        { type: 'module' },
+      );
+      const timeout = setTimeout(() => {
+        worker.terminate();
+        console.warn('[MonteCarlo] Worker timed out, falling back to sync');
+        resolve(generateMonteCarloSims());
+      }, 10_000);
+
+      worker.onmessage = (evt) => {
+        clearTimeout(timeout);
+        worker.terminate();
+        if (evt.data.ok) {
+          resolve(evt.data.paths);
+        } else {
+          console.warn('[MonteCarlo] Worker error:', evt.data.error);
+          resolve(generateMonteCarloSims());
+        }
+      };
+      worker.onerror = () => {
+        clearTimeout(timeout);
+        worker.terminate();
+        resolve(generateMonteCarloSims());
+      };
+      worker.postMessage({ paths, steps, startVal });
+    } catch {
+      // Worker construction failed (e.g., SSR) — fallback
+      resolve(generateMonteCarloSims());
+    }
+  });
+}

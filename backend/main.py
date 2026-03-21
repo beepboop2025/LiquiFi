@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import time
+import uuid
 from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -146,6 +147,67 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Enterprise security headers + request ID + request/response logging
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def enterprise_security_middleware(request: Request, call_next):
+    # Generate unique request ID
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    start_time = time.monotonic()
+
+    # Log incoming request
+    logger.info(
+        "[REQ] %s %s | id=%s | client=%s",
+        request.method,
+        request.url.path,
+        request_id[:8],
+        request.client.host if request.client else "unknown",
+    )
+
+    response = await call_next(request)
+
+    # Timing
+    duration_ms = round((time.monotonic() - start_time) * 1000, 1)
+
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-Request-Id"] = request_id
+    response.headers["X-Response-Time"] = f"{duration_ms}ms"
+
+    # HSTS in production
+    if config.REQUIRE_HTTPS:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+
+    # CSP — permissive enough for SPA but blocks inline scripts from untrusted sources
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; "
+        "frame-ancestors 'none';"
+    )
+
+    # Log response
+    logger.info(
+        "[RES] %s %s | id=%s | status=%d | %sms",
+        request.method,
+        request.url.path,
+        request_id[:8],
+        response.status_code,
+        duration_ms,
+    )
+
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -346,8 +408,10 @@ async def ws_rates(ws: WebSocket):
 
 # ---------------------------------------------------------------------------
 # REST endpoints
+# Routes are available at both /api/ (legacy) and /api/v1/ (versioned).
 # ---------------------------------------------------------------------------
 @app.get("/api/health")
+@app.get("/api/v1/health")
 async def health():
     live_stats = get_live_stats()
     scrape_stats = rate_manager.get_scrape_stats()
@@ -395,6 +459,7 @@ async def health():
 
 
 @app.get("/api/rates")
+@app.get("/api/v1/rates")
 async def get_rates():
     snapshot = rate_manager.snapshot()
     source = rate_manager.get_source_map()
@@ -413,6 +478,7 @@ async def get_rates():
 
 
 @app.get("/api/forecast")
+@app.get("/api/v1/forecast")
 async def forecast():
     snapshot = rate_manager.snapshot()
     rate_buffer = rate_manager.get_rate_buffer()
@@ -442,6 +508,7 @@ async def forecast():
 
 
 @app.get("/api/monte-carlo")
+@app.get("/api/v1/monte-carlo")
 async def monte_carlo():
     snapshot = rate_manager.snapshot()
     try:
@@ -456,12 +523,14 @@ async def monte_carlo():
 
 
 @app.get("/api/cashflow-history")
+@app.get("/api/v1/cashflow-history")
 async def cashflow_history():
     history = _generate_cashflow_history()
     return {"history": history}
 
 
 @app.get("/api/data-quality")
+@app.get("/api/v1/data-quality")
 async def data_quality():
     """Get detailed data quality metrics and recommendations."""
     monitor = get_data_quality_monitor()
@@ -485,6 +554,7 @@ async def data_quality():
 
 
 @app.get("/api/model/performance")
+@app.get("/api/v1/model/performance")
 async def model_performance():
     """Get model performance metrics (prediction vs actual)."""
     tracker = get_performance_tracker()
@@ -492,6 +562,7 @@ async def model_performance():
 
 
 @app.post("/api/model/retrain")
+@app.post("/api/v1/model/retrain")
 async def retrain(x_api_key: str = Header(default="")):
     global _model_loaded, _models_loaded, _retrain_in_progress
 

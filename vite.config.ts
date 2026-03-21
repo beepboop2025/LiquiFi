@@ -15,6 +15,12 @@ export default defineConfig({
       },
     },
   },
+  // Vite has built-in web worker support via:
+  //   new Worker(new URL('./workers/myWorker.ts', import.meta.url), { type: 'module' })
+  // No special config needed; workers are automatically bundled.
+  worker: {
+    format: "es",
+  },
   server: {
     proxy: {
       "/api": "http://localhost:8000",

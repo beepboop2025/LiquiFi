@@ -6,6 +6,7 @@
  * - REST client for forecast, monte-carlo, cashflow-history, data-quality
  * - Connection state tracking with fallback flag
  * - Data quality metrics from WebSocket stream
+ * - Request deduplication and debouncing via RequestManager
  */
 
 import type {
@@ -23,6 +24,14 @@ import type {
   CrrHistoryPoint,
 } from '../types';
 
+import {
+  markApiStart,
+  markApiEnd,
+  recordApiSuccess,
+  recordApiFailure,
+  recordWsLatency,
+} from '../utils/perfMonitor';
+
 const FETCH_TIMEOUT_MS = 15_000;
 
 function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response> {
@@ -30,6 +39,97 @@ function fetchWithTimeout(url: string, options?: RequestInit): Promise<Response>
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
 }
+
+// ---------------------------------------------------------------------------
+// RequestManager — deduplication + debounce
+// ---------------------------------------------------------------------------
+class RequestManager {
+  /** In-flight requests keyed by URL */
+  private _inflight = new Map<string, Promise<Response>>();
+  /** Debounce timers keyed by URL */
+  private _debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Default debounce ms */
+  private _debounceMs: number;
+
+  constructor(debounceMs = 500) {
+    this._debounceMs = debounceMs;
+  }
+
+  /**
+   * Fetch with deduplication: if the same URL is already in-flight,
+   * return the existing promise instead of making a duplicate request.
+   */
+  async fetch(url: string, options?: RequestInit): Promise<Response> {
+    const key = `${options?.method || 'GET'}:${url}`;
+
+    // Return existing in-flight promise for identical request
+    const existing = this._inflight.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const perfId = markApiStart(url.replace(/^.*\/api\//, ''));
+    const promise = fetchWithTimeout(url, options)
+      .then((res) => {
+        markApiEnd(perfId);
+        if (res.ok) recordApiSuccess();
+        else recordApiFailure();
+        return res;
+      })
+      .catch((err) => {
+        markApiEnd(perfId);
+        recordApiFailure();
+        throw err;
+      })
+      .finally(() => {
+        this._inflight.delete(key);
+      });
+
+    this._inflight.set(key, promise);
+    return promise;
+  }
+
+  /**
+   * Debounced fetch: waits for `ms` of inactivity before actually firing.
+   * Subsequent calls within the debounce window cancel the previous one.
+   */
+  debouncedFetch<T>(
+    url: string,
+    parser: (res: Response) => Promise<T>,
+    ms?: number,
+  ): Promise<T | null> {
+    const debounce = ms ?? this._debounceMs;
+    const key = url;
+
+    // Cancel any pending debounce for this URL
+    const existing = this._debounceTimers.get(key);
+    if (existing) clearTimeout(existing);
+
+    return new Promise<T | null>((resolve) => {
+      const timer = setTimeout(async () => {
+        this._debounceTimers.delete(key);
+        try {
+          const res = await this.fetch(url);
+          if (!res.ok) {
+            resolve(null);
+            return;
+          }
+          resolve(await parser(res));
+        } catch {
+          resolve(null);
+        }
+      }, debounce);
+      this._debounceTimers.set(key, timer);
+    });
+  }
+
+  /** Number of currently in-flight requests */
+  get inflightCount(): number {
+    return this._inflight.size;
+  }
+}
+
+export const requestManager = new RequestManager(500);
 
 // Electron uses direct URLs since there's no Vite proxy
 declare global {
@@ -71,6 +171,7 @@ const MAX_RECONNECT_DELAY_MS = 30000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let _reconnectAttempt: number = 0;
 let _intentionalClose: boolean = false;
+let _lastWsMessageTs: number = 0;
 
 /**
  * Connect WebSocket to backend for live rate streaming.
@@ -106,7 +207,16 @@ function _connect(): void {
 
   _ws.onmessage = (evt: MessageEvent): void => {
     try {
-      const msg = JSON.parse(evt.data as string) as { type?: string; data?: Record<string, unknown> };
+      const msg = JSON.parse(evt.data as string) as { type?: string; data?: Record<string, unknown>; timestamp?: string };
+      // Track WS latency if server includes a timestamp
+      if (msg.timestamp) {
+        const serverTs = new Date(msg.timestamp).getTime();
+        const latency = Date.now() - serverTs;
+        if (latency >= 0 && latency < 60_000) {
+          recordWsLatency(latency);
+        }
+      }
+      _lastWsMessageTs = Date.now();
       if (msg.type === 'rates' && msg.data) {
         if (_onRates) _onRates(msg.data as Parameters<WebSocketCallbacks['onRates']>[0]);
         if (_onDataQuality && msg.data.dataQuality) {
@@ -195,12 +305,36 @@ export function isBackendConnected(): boolean {
   return _connected;
 }
 
+// ---------------------------------------------------------------------------
+// Connection health exports
+// ---------------------------------------------------------------------------
+
+export type WsConnectionState = 'connected' | 'reconnecting' | 'disconnected';
+
+export function getWsConnectionState(): WsConnectionState {
+  if (_connected) return 'connected';
+  if (_reconnectAttempt > 0 && _reconnectAttempt < MAX_RECONNECT_ATTEMPTS) return 'reconnecting';
+  return 'disconnected';
+}
+
+export function getLastWsMessageTs(): number {
+  return _lastWsMessageTs;
+}
+
+export function getReconnectAttempt(): number {
+  return _reconnectAttempt;
+}
+
+// ---------------------------------------------------------------------------
+// REST endpoints (using RequestManager for dedup)
+// ---------------------------------------------------------------------------
+
 /**
  * Fetch 24-hour LSTM forecast from backend.
  */
 export async function fetchForecast(): Promise<ForecastPoint[] | null> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/forecast`);
+    const res = await requestManager.fetch(`${API_BASE}/forecast`);
     if (!res.ok) {
       console.warn(`[API] Forecast fetch failed: ${res.status} ${res.statusText}`);
       return null;
@@ -218,7 +352,7 @@ export async function fetchForecast(): Promise<ForecastPoint[] | null> {
  */
 export async function fetchMonteCarlo(): Promise<MonteCarloResponse | null> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/monte-carlo`);
+    const res = await requestManager.fetch(`${API_BASE}/monte-carlo`);
     if (!res.ok) {
       console.warn(`[API] Monte Carlo fetch failed: ${res.status} ${res.statusText}`);
       return null;
@@ -235,7 +369,7 @@ export async function fetchMonteCarlo(): Promise<MonteCarloResponse | null> {
  */
 export async function fetchCashFlowHistory(): Promise<CashFlowPoint[] | null> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/cashflow-history`);
+    const res = await requestManager.fetch(`${API_BASE}/cashflow-history`);
     if (!res.ok) {
       console.warn(`[API] Cash flow history fetch failed: ${res.status} ${res.statusText}`);
       return null;
@@ -253,7 +387,7 @@ export async function fetchCashFlowHistory(): Promise<CashFlowPoint[] | null> {
  */
 export async function fetchDataQuality(): Promise<DataQualityResponse | null> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/data-quality`);
+    const res = await requestManager.fetch(`${API_BASE}/data-quality`);
     if (!res.ok) return null;
     return (await res.json()) as DataQualityResponse;
   } catch (err: unknown) {
@@ -287,7 +421,7 @@ export async function triggerRetrain(apiKey?: string): Promise<{ status: string;
  */
 export async function fetchHealth(): Promise<HealthResponse | null> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/health`);
+    const res = await requestManager.fetch(`${API_BASE}/health`);
     if (!res.ok) {
       console.warn(`[API] Health check failed: ${res.status} ${res.statusText}`);
       return null;

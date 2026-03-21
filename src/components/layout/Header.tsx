@@ -176,7 +176,14 @@ const Header = memo<HeaderProps>(function Header({ backend, time, alertCount, ra
         </div>
       </div>
 
-      <RateTicker rateItems={rateItems} />
+      <RateTicker
+        rateItems={rateItems}
+        dataQuality={backend.dataQuality ? {
+          realFieldsCount: backend.dataQuality.realFieldsCount,
+          totalFields: backend.dataQuality.totalFields,
+          stalenessSeconds: backend.dataQuality.stalenessSeconds,
+        } : undefined}
+      />
     </header>
   );
 });
